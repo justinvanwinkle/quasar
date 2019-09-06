@@ -1,8 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-from __future__ import unicode_literals
-from __future__ import print_function
-
 from pratt import PrattParser
 
 from sys import stdout
@@ -241,10 +236,6 @@ if __name__ == '__main__':
         if args.lisp_fn:
             f.close()
     except SyntaxError:
-        import tracebackturbo
-        import sys
-        print(tracebackturbo.format_exc(with_vars=True))
-        print('on token %s' % mule_parser.token_handler)
         line_no = mule_parser.token_handler.line
         column_no = mule_parser.token_handler.column
         lines = mule_parser.code.splitlines()[max(line_no - 5, 0):line_no]
