@@ -1,4 +1,8 @@
-from pratt import PrattParser
+from .pratt import PrattParser
+from .token_defs import Block
+from .token_defs import Endblock
+from .token_defs import Module
+
 
 from sys import stdout
 
@@ -104,10 +108,6 @@ class MuleParser(PrattParser):
         self.ns = NamespaceStack()
 
     def _munge_tokens(self, tokens):
-        from token_defs import Block
-        from token_defs import Endblock
-        from token_defs import Module
-
         class Fake:
             name = None
 
@@ -162,7 +162,7 @@ class MuleParser(PrattParser):
             if token.name == 'WHITESPACE':
                 if not is_significant(index):
                     continue
-                new_indent = len(token.value) / 4
+                new_indent = len(token.value) // 4
             elif token.name == 'NEWLINE':
                 if prev_tok(index).name != 'NEWLINE':
                     new_tokens.append(token)
@@ -201,11 +201,10 @@ class MuleParser(PrattParser):
 
 if __name__ == '__main__':
     import argparse
-    import sys
     from os.path import splitext
     from os.path import split
 
-    from token_defs import all_ops
+    from .token_defs import all_ops
 
     argparser = argparse.ArgumentParser(description='Python to CL compiler')
     argparser.add_argument('mule_fn', help='input file')
@@ -220,9 +219,8 @@ if __name__ == '__main__':
         code = f.read()
     try:
         mule_parser = MuleParser(code, all_ops, filename=fn)
-    except Exception as e:
-        print(e)
-        sys.exit(1)
+    except Exception:
+        raise
     try:
         if args.debug:
             mule_parser.debug = True
@@ -235,13 +233,11 @@ if __name__ == '__main__':
         print(result.cl(), file=f)
         if args.lisp_fn:
             f.close()
-    except SyntaxError:
+    except Exception:
         line_no = mule_parser.token_handler.line
         column_no = mule_parser.token_handler.column
         lines = mule_parser.code.splitlines()[max(line_no - 5, 0):line_no]
         print('line %s column %s\n' % (line_no, column_no))
         print('\n'.join(lines))
         print(' ' * (column_no - 1) + '^^^')
-    except Exception as e:
-        print(e)
-        sys.exit(1)
+        raise

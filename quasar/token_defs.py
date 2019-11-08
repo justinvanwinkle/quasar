@@ -2,105 +2,46 @@
 all_ops = []
 
 
-def find_self_assignments(n):
-    assignments = []
-    if n.kind == 'body':
-        for form in n.forms:
-            assignments.extend(find_self_assignments(form))
-    elif n.kind in ('defun', 'condclause', 'while', 'for'):
-        assignments.extend(find_self_assignments(n.body))
-    elif n.kind == 'setf':
-        assignments.extend(find_self_assignments(n.left))
-    elif n.kind == 'cond':
-        for clause in n.clauses:
-            assignments.extend(find_self_assignments(clause))
-    elif n.kind == 'getattr':
-        if n.object_name.name == 'self':
-            assignments.append(n.attribute_name.name)
-
-    return assignments
-
-
-def unbox_arglist(t):
-    args = []
-    kwargs = []
-    if t.kind != 'tuple':
-        t = Tuple([t])
-    for arg in t.values:
-        if arg.kind == 'setf':
-            kwargs.append((arg.left, arg.right))
-        else:
-            args.append(arg)
-
-    return args, kwargs
-
-
 def register(cls):
     all_ops.append(cls)
     return cls
 
 
-class Lisp(object):
+class AST(object):
     kind = 'node'
 
     def __repr__(self):
         return self.cl()
 
     def clmap(self, forms):
-        return ['%s' % x for x in forms]
+        return [f'{x}' for x in forms]
 
     def cl(self):
         return '(%s-XXX XXX)' % self.kind
 
 
-class Comment(Lisp):
+class Comment(AST):
     kind = 'comment'
 
     def __init__(self, comment):
         self.comment = comment
 
     def cl(self):
-        return '#|%s|#' % self.comment
+        return f'# {self.comment}'
 
 
-class Quote(Lisp):
-    kind = 'quote'
-
-    def __init__(self, form):
-        self.form = form
-
-    def cl(self):
-        return "'%s" % self.form
-
-
-class LispBody(Lisp):
+class Body(AST):
     kind = 'body'
 
     def __init__(self, forms):
         self.forms = forms
 
-    def cl(self, force_progn=False, implicit_body=False):
-        if implicit_body and not force_progn:
-            return '\n'.join(self.clmap(self.forms))
-        elif (len(self.forms) > 1 and not implicit_body) or force_progn:
-            return '(CL:PROGN %s)\n' % '\n'.join(self.clmap(self.forms))
-        elif len(self.forms) == 1:
-            return self.forms[0].cl()
-        else:
-            # Do we need this?
-            return 'nil'
-
-
-class MakePackage(Lisp):
-    def __init__(self, name):
-        self.name = name
-
     def cl(self):
-        return '(make-package "%s")' % self.name
+        return '\n'.join(self.clmap(self.forms)) + '\n'
 
 
-class LispPackage(Lisp):
-    kind = 'package'
+class PythonModule(AST):
+    kind = 'module'
 
     def __init__(self, module_name, block):
         self.module_name = module_name
@@ -108,12 +49,11 @@ class LispPackage(Lisp):
 
     def cl(self):
         forms = []
-        forms.append(MakePackage(self.module_name).cl())
-        forms.append(self.block.cl(implicit_body=True))
+        forms.append(self.block.cl())
         return ''.join(forms)
 
 
-class Method(Lisp):
+class Method(AST):
     kind = 'defun'
 
     def __init__(self, defun, class_name=None):
@@ -122,37 +62,24 @@ class Method(Lisp):
         self.first_arg = defun.arg_names[0]
 
     def cl(self):
-        if self.class_name and self.first_arg.kind != 'type':
-            return '\n(CL:DEFMETHOD %s ((%s %s) %s) \n%s)' % (
-                self.defun.name,
-                self.first_arg,
-                self.class_name,
-                self.defun.cl_args(skip_first=True),
-                self.defun.body.cl(implicit_body=True))
-        return '\n(CL:DEFMETHOD %s (%s) \n%s)' % (
+        return 'def %s(%s):\n%s' % (
             self.defun.name,
             self.defun.cl_args(),
-            self.defun.body.cl(implicit_body=True))
+            self.defun.body.cl())
 
 
-class CLOSClass(Lisp):
+class Class(AST):
     kind = 'class'
 
     def __init__(self, name, bases=(), slots=(), members=(), methods=()):
         self.name = name
         self.bases = list(bases)
-        self.slots = list(slots)
-        self.members = list(members)
         self.methods = list(methods)
         self.constructor = None
 
     def add_form(self, form):
         if form.kind == 'defun':
-            if form.name.name == '__init__':
-                self.constructor = form
-                self.slots = find_self_assignments(form)
-            else:
-                self.methods.append(form)
+            self.methods.append(form)
 
     def cl_method(self, defun):
         return Method(defun, self.name)
@@ -161,21 +88,10 @@ class CLOSClass(Lisp):
         return ' '.join(self.cl_method(defun).cl() for defun in self.methods)
 
     def cl_bases(self):
-        return '(%s)' % ' '.join(base.cl() for base in self.bases)
-
-    def cl_slot(self, slot):
-        return '|%s|' % slot
-
-    def cl_slots(self):
-        if self.slots:
-            return '(%s)' % ' '.join(self.cl_slot(slot) for slot in self.slots)
-        else:
-            return 'NIL'
-
-    def cl_init_call(self):
-        if not self.constructor:
+        if not self.bases:
             return ''
-        return '(|init| |self| %s)' % self.cl_init_args()
+
+        return '(%s)' % ', '.join(base.cl() for base in self.bases)
 
     def cl_init_args(self):
         if self.constructor is None:
@@ -192,44 +108,29 @@ class CLOSClass(Lisp):
             arg_names = []
             kw_args = []
         forms = list(body_forms) + [Symbol('self')]
-        body = Let(
-            Symbol('self'),
-            LispLiteral("(CL:MAKE-INSTANCE '%s)" % self.name),
-            LispBody(forms))
+        body = Body(forms)
 
         defun = Defun(
             self.name,
             arg_names,
             kw_args,
-            LispBody([body]))
+            Body([body]))
 
-        return "%s" % defun
+        return "%s\n" % defun
 
     def cl(self):
-        defclass = '(CL:DEFCLASS %s %s %s)' % (
+        defclass = 'class %s%s:\n' % (
             self.name.cl(),
-            self.cl_bases(),
-            self.cl_slots())
+            self.cl_bases())
         if self.methods:
             defclass += ' '
             defclass += self.cl_methods()
         defclass += ' '
-        defclass += self.cl_constructor()
 
         return defclass
 
 
-class Condition(CLOSClass):
-    def cl(self):
-        defclass = '(CL:DEFINE-CONDITION %s %s %s)' % (
-            self.name.cl(),
-            self.cl_bases(),
-            self.cl_slots())
-
-        return defclass
-
-
-class Defun(Lisp):
+class Defun(AST):
     kind = 'defun'
 
     def __init__(self, name, arg_names, kw_args, body):
@@ -265,7 +166,7 @@ class Defun(Lisp):
         defun = '(CL:DEFUN %s (%s) \n%s)' % (
             self.name,
             self.cl_args(),
-            self.body.cl(implicit_body=True))
+            self.body.cl())
         return defun
 
 
@@ -278,11 +179,11 @@ class FletLambda(Defun):
         return '(CL:FLET ((%s (%s) %s)) %s)' % (
             self.defun.name,
             self.defun.cl_args(),
-            self.defun.body.cl(implicit_body=True),
-            self.right.cl(implicit_body=True))
+            self.defun.body.cl(),
+            self.right.cl())
 
 
-class Import(Lisp):
+class Import(AST):
     kind = 'import'
 
     def __init__(self, module, symbols):
@@ -294,7 +195,7 @@ class Import(Lisp):
         return "(CL:IMPORT '(%s))" % symbols
 
 
-class Export(Lisp):
+class Export(AST):
     kind = 'export'
 
     def __init__(self, values):
@@ -304,7 +205,7 @@ class Export(Lisp):
         return "(CL:EXPORT '(%s))" % ' '.join(self.clmap(self.values))
 
 
-class ForLoop(Lisp):
+class ForLoop(AST):
     kind = 'for'
 
     def __init__(self, in_node, body):
@@ -328,19 +229,19 @@ class ForLoop(Lisp):
             domain = "FROM %s BELOW %s BY %s" % (
                 start, stop, step)
         else:
-            domain = 'BEING THE ELEMENTS OF %s' % collection
+            domain = '%s' % collection
 
         if self.in_node.thing.kind == 'type':
             var = self.in_node.thing.of_type_cl()
         else:
             var = self.in_node.thing.cl()
-        return '(CL:LOOP FOR %s %s DO %s)' % (
+        return 'for %s in %s:\n %s)' % (
             var,
             domain,
             self.body.cl())
 
 
-class CondClause(Lisp):
+class CondClause(AST):
     kind = 'condclause'
 
     def __init__(self, condition, body):
@@ -348,20 +249,20 @@ class CondClause(Lisp):
         self.body = body
 
     def cl(self):
-        return '(%s %s)' % (self.condition, self.body)
+        return '%s:\n %s' % (self.condition, self.body)
 
 
-class Cond(Lisp):
+class Cond(AST):
     kind = 'cond'
 
     def __init__(self, clauses):
         self.clauses = clauses
 
     def cl(self):
-        return '(COND %s)' % ' '.join('%s' % c for c in self.clauses)
+        return 'if %s' % ' '.join('%s' % c for c in self.clauses)
 
 
-class UnwindProtect(Lisp):
+class UnwindProtect(AST):
     def __init__(self, body_form, cleanup_form):
         self.body_form = body_form
         self.cleanup_form = cleanup_form
@@ -371,36 +272,39 @@ class UnwindProtect(Lisp):
             self.body_form, self.cleanup_form)
 
 
-class HandlerCase(Lisp):
-    def __init__(self, try_body, excepts):
+class HandlerCase(AST):
+    def __init__(self, try_body, excepts, finally_body):
         self.try_body = try_body
         self.excepts = excepts
+        self.finally_body = finally_body
 
     def cl(self):
-        return '(CL:HANDLER-CASE \n%s \n%s)' % (
-            self.try_body.cl(force_progn=True),
-            '\n'.join(self.clmap(self.excepts)))
+        try_cl = 'try:\n %s' % self.try_body.cl()
+
+        excepts_cl = ''
+        if self.excepts:
+            excepts_cl = '\n'.join([ex.cl() for ex in self.excepts])
+
+        finally_cl = ''
+        if self.finally_body:
+            finally_cl = 'finally:\n %s' % self.finally_body.cl()
+        return try_cl + excepts_cl + finally_cl
 
 
-class Except(Lisp):
-    def __init__(self, body, exception_class=None, exception_name=None):
-        self.exception_class = exception_class
+class Except(AST):
+    def __init__(self, body, exception_call=None, alias=None):
+        self.exception_call = exception_call
+        self.alias = alias
         self.body = body
-        self.exception_name = exception_name
 
     def cl(self):
-        exception_class = self.exception_class
-        if exception_class is None:
-            exception_class = LispLiteral('CL:CONDITION')
-        exception_name = self.exception_name
-        if exception_name is None:
-            exception_name = ''
-
-        return '(%s (%s) %s)' % (
-            exception_class, exception_name, self.body)
+        call = '%s' % self.exception_call
+        if self.alias:
+            call += ' as %s' % self.alias
+        return 'except %s:\n %s' % (call, self.body)
 
 
-class Return(Lisp):
+class Return(AST):
     kind = 'return'
 
     def __init__(self, return_expr, return_name):
@@ -411,20 +315,17 @@ class Return(Lisp):
         return '(CL:RETURN-FROM %s %s)' % (self.return_name, self.return_expr)
 
 
-class Symbol(Lisp):
+class Symbol(AST):
     kind = 'symbol'
 
-    def __init__(self, name, namespace=None):
+    def __init__(self, name):
         self.name = name
-        self.namespace = namespace
 
     def cl(self):
-        if self.namespace is not None:
-            return '|%s|:|%s|' % (self.namespace, self.symbol)
-        return '|%s|' % self.name
+        return '%s' % self.name
 
 
-class WhileLoop(Lisp):
+class WhileLoop(AST):
     kind = 'while'
 
     def __init__(self, test, body):
@@ -437,12 +338,15 @@ class WhileLoop(Lisp):
             self.body.cl())
 
 
-class In(Lisp):
+class In(AST):
     kind = 'in'
 
     def __init__(self, thing, collection):
         self.thing = thing
         self.collection = collection
+
+    def cl(self):
+        return '%s in %s' % (self.thing, self.collection)
 
 
 class Find(In):
@@ -452,14 +356,14 @@ class Find(In):
         return '(find %s %s)' % (self.thing, self.collection)
 
 
-class Nil(Lisp):
+class Nil(AST):
     kind = 'nil'
 
     def cl(self):
         return 'NIL'
 
 
-class UsePackage(Lisp):
+class UsePackage(AST):
     kind = 'use'
 
     def __init__(self, right):
@@ -469,7 +373,7 @@ class UsePackage(Lisp):
         return '(CL:USE-PACKAGE "%s")' % self.right.name
 
 
-class List(Lisp):
+class List(AST):
     kind = 'list'
 
     def __init__(self, values):
@@ -479,7 +383,7 @@ class List(Lisp):
         return ("(|list| '(%s))" % ' '.join(self.clmap(self.values)))
 
 
-class GetItem(Lisp):
+class GetItem(AST):
     kind = 'getitem'
 
     def __init__(self, left, key):
@@ -490,17 +394,39 @@ class GetItem(Lisp):
         return '(|getitem| %s %s)' % (self.left, self.key)
 
 
-class Tuple(Lisp):
+class Slice(AST):
+    kind = 'slice'
+
+    def __init__(self, left, components):
+        self.left = left
+        self.components = components
+
+    def cl(self):
+        return '[%s]' % ':'.join(self.components)
+
+
+class Tuple(AST):
     kind = 'tuple'
 
     def __init__(self, values):
         self.values = values
 
     def cl(self):
-        return "(|tuple| '(%s))" % ' '.join(self.clmap(self.values))
+        return "(%s,)" % ', '.join(self.clmap(self.values))
 
 
-class Call(Lisp):
+class Raise(AST):
+    kind = 'raise'
+
+    def __init__(self, exception):
+        self.exception = exception
+
+    def cl(self):
+        if self.exception is None:
+            return 'raise'
+        return f'raise {self.exception}'
+
+class Call(AST):
     kind = 'call'
 
     def __init__(self, name, args=(), kw_args=()):
@@ -511,16 +437,17 @@ class Call(Lisp):
     def cl_kw_args(self):
         forms = []
         for k, v in self.kw_args:
-            forms.append(':%s %s' % (k, v))
-        return ' '.join(forms)
+            forms.append('%s=%s' % (k, v))
+        return ', '.join(forms)
 
     def cl(self):
-        return '(%s %s %s)' % (self.name,
-                               ' '.join(self.clmap(self.args)),
-                               self.cl_kw_args())
+        args = ', '.join(self.clmap(self.args))
+        if self.kw_args:
+            args += ', '.join(self.clmap(self.kw_args))
+        return '%s(%s)' % (self.name, args)
 
 
-class Type(Lisp):
+class Type(AST):
     kind = 'type'
 
     def __init__(self, type, left):
@@ -538,7 +465,7 @@ class Type(Lisp):
         return '%s of-type %s' % (self.left, self.type)
 
 
-class Equality(Lisp):
+class Equality(AST):
     kind = 'equal'
 
     def __init__(self, left, right):
@@ -546,10 +473,10 @@ class Equality(Lisp):
         self.right = right
 
     def cl(self):
-        return '(|__eq__| %s %s)' % (self.left.cl(), self.right.cl())
+        return '%s==%s' % (self.left.cl(), self.right.cl())
 
 
-class NotEquality(Lisp):
+class NotEquality(AST):
     kind = 'equal'
 
     def __init__(self, left, right):
@@ -560,7 +487,7 @@ class NotEquality(Lisp):
         return '(CL:NOT (|__eq__| %s %s))' % (self.left.cl(), self.right.cl())
 
 
-class DefParameter(Lisp):
+class DefParameter(AST):
     kind = 'defparameter'
 
     def __init__(self, left, right):
@@ -571,7 +498,7 @@ class DefParameter(Lisp):
         return '(CL:DEFPARAMETER %s %s)' % (self.left.cl(), self.right.cl())
 
 
-class MultipleValueBind(Lisp):
+class MultipleValueBind(AST):
     kind = 'multiple_value_bind'
 
     def __init__(self, left, right, body):
@@ -583,10 +510,10 @@ class MultipleValueBind(Lisp):
         return '(CL:MULTIPLE-VALUE-BIND (%s) %s %s)' % (
             ' '. join(self.clmap(self.left.values)),
             self.right,
-            self.body.cl(implicit_body=True))
+            self.body.cl())
 
 
-class Setf(Lisp):
+class Setf(AST):
     kind = 'setf'
 
     def __init__(self, left, right):
@@ -594,18 +521,16 @@ class Setf(Lisp):
         self.right = right
 
     def cl(self):
-        return '(CL:SETF %s %s)' % (self.left, self.right)
+        return '%s = %s' % (self.left, self.right)
 
 
-class Let(Lisp):
+class Let(AST):
     kind = 'let'
 
-    def __init__(self, left, right, body):
+    def __init__(self, left, right):
         self.pairs = [(left, right)]
-        self.body = body
 
     def cl(self):
-        declares = []
         pairs = []
         for l, r in self.pairs:
             if l.kind == 'type':
@@ -614,15 +539,11 @@ class Let(Lisp):
                 pairs.append((l.left, r))
             else:
                 pairs.append((l, r))
-        for declare in declares:
-            self.body.forms.insert(0, declare)
 
-        return '(CL:LET (%s)\n%s)' % (
-            ' '.join('(%s %s)' % (l, r) for l, r in pairs),
-            self.body.cl(implicit_body=True))
+        return '\n'.join('%s = %s' % (l, r) for l, r in pairs)
 
 
-class SetItem(Lisp):
+class SetItem(AST):
     kind = 'setitem'
 
     def __init__(self, left, right):
@@ -634,7 +555,7 @@ class SetItem(Lisp):
             self.left.left, self.left.key, self.right)
 
 
-class Number(Lisp):
+class Number(AST):
     kind = 'number'
 
     def __init__(self, value):
@@ -644,7 +565,7 @@ class Number(Lisp):
         return '%s' % self.value
 
 
-class BinaryOperator(Lisp):
+class BinaryOperator(AST):
     kind = 'binary_op'
 
     def __init__(self, op, left, right):
@@ -656,7 +577,7 @@ class BinaryOperator(Lisp):
         return '(%s %s %s)' % (self.op, self.left.cl(), self.right.cl())
 
 
-class AttrLookup(Lisp):
+class AttrLookup(AST):
     kind = 'getattr'
 
     def __init__(self, object_name, attribute_name):
@@ -664,18 +585,17 @@ class AttrLookup(Lisp):
         self.attribute_name = attribute_name
 
     def cl(self):
-        return "(CL:SLOT-VALUE %s '%s)" % (self.object_name,
-                                           self.attribute_name)
+        return "%s.%s" % (self.object_name, self.attribute_name)
 
 
-class Splat(Lisp):
+class Splat(AST):
     kind = 'splat'
 
     def __init__(self, right):
         self.right = right
 
 
-class String(Lisp):
+class String(AST):
     kind = 'string'
 
     def __init__(self, value):
@@ -685,7 +605,7 @@ class String(Lisp):
         return '"%s"' % self.value
 
 
-class LispLiteral(Lisp):
+class Literal(AST):
     kind = 'cl_literal'
 
     def __init__(self, literal):
@@ -776,20 +696,23 @@ class NoDispatchTokens(EnumeratedToken):
 @register
 class BinOpToken(EnumeratedToken):
     lbp_map = {
-        '%': 60,
-        '&': 0,
-        '*': 60,
-        '**': 0,
-        '+': 50,
-        '-': 50,
+        '**': 80,
         '/': 60,
         '//': 60,
-        '<': 40,
-        '<<': 0,
-        '>': 40,
-        '>>': 0,
+        '*': 60,
+        '%': 60,
+        '+': 50,
+        '-': 50,
+        '<<': 45,
+        '>>': 45,
+        '&': 40,
         '^': 45,
-        '|': 0}
+        '|': 40,
+        '<': 40,
+        '>': 40,
+        '>=': 40,
+        '<=': 40,
+    }
 
     op_map = {
         '^': 'LOGXOR',
@@ -846,7 +769,7 @@ class Colon(Token):
         return True
 
     def nud(self, parser, value):
-        return LispLiteral(value[1:])
+        return Literal(value[1:])
 
     def led(self, parser, left):
         right = parser.expression(200)
@@ -857,42 +780,13 @@ class Colon(Token):
 class AssignOrEquals(EnumeratedToken):
     lbp_map = {
         '==': 40,
-        '=': 10}
+        '=': 1}
 
     def led(self, parser, left):
         if self.value == '=':
-            if left.kind == 'tuple':
-                right = parser.expression(10)
-                parser.maybe_match('NEWLINE')
-                parser.ns.push_new()
-                for val in left.values:
-                    parser.ns.add(val.name)
-                mvb_node = MultipleValueBind(
-                    left,
-                    right,
-                    LispBody(parser.parse_rest_of_body()))
-                parser.ns.pop()
-                return mvb_node
-            elif left.kind == 'getitem':
-                return SetItem(left, parser.expression())
-            elif ((left.kind == 'getattr' or
-                   parser.ns.inside_form or
-                   parser.ns.class_top_level or
-                   left.name in parser.ns)):
-                return Setf(left, parser.expression())
-            elif parser.ns.depth == 0:
-                parser.ns.add(left.name)
-                return DefParameter(left, parser.expression())
-            else:
-                right = parser.expression(10)
-                parser.maybe_match('NEWLINE')
-                parser.ns.push_new()
-                parser.ns.add(left.name)
-                let_node = Let(left,
-                               right,
-                               LispBody(parser.parse_rest_of_body()))
-                parser.ns.pop()
-                return let_node
+            right = parser.expression()
+            let_node = Let(left, right)
+            return let_node
         else:
             return Equality(left, parser.expression())
 
@@ -910,26 +804,21 @@ class Module(Token):
     name = 'MODULE'
 
     def nud(self, parser, value):
-        parser.ns.push_new()
-        package = LispPackage(parser.filename, parser.expression())
-        parser.ns.pop()
+        package = PythonModule(parser.filename, parser.expression())
         return package
 
 
 @register
 class Block(Token):
-    lbp = 0
     name = 'BLOCK'
 
     def nud(self, parser, value):
         forms = parser.parse_rest_of_body()
-        parser.match('ENDBLOCK')
-        return LispBody(forms)
+        return Body(forms)
 
 
 @register
 class Endblock(Token):
-    lbp = 0
     name = 'ENDBLOCK'
 
 
@@ -944,10 +833,10 @@ class Name(Token):
         value = self.value
         if value == 'in':
             self.name = 'IN'
-            self.lbp = 150
+            self.lbp = 30
         elif value == 'is':
             self.name = 'IS'
-            self.lbp = 140
+            self.lbp = 30
         elif value == 'elif':
             self.name = 'ELIF'
         elif value == 'else':
@@ -972,48 +861,31 @@ class Name(Token):
     def nud(self, parser, value):
         if value == 'raise':
             kw_args = []
-            exception_class = parser.expression(80)
-            if parser.maybe_match('('):
-                while parser.watch(')'):
-                    arg_name = parser.expression(40)
-                    parser.match('=')
-                    kw_args.append((arg_name, parser.expression(40)))
-                    parser.maybe_match('NEWLINE')
-                    parser.maybe_match(',')
-                    parser.maybe_match('NEWLINE')
-
-            return Call('CL:ERROR', [Quote(exception_class)], kw_args)
+            if parser.maybe_match('NEWLINE'):
+                return Raise(None)
+            exception_class = parser.expression()
+            return Raise(exception_class)
         if value == 'try':
             parser.match(':')
-            parser.ns.push_new()
+            parser.match('NEWLINE')
             try_body = parser.expression()
-            parser.ns.pop()
             finally_body = None
             excepts = []
             while parser.maybe_match('EXCEPT'):
                 exc_class = None
                 exc_name = None
-                parser.ns.push_new()
                 if not parser.maybe_match(':'):
-                    exc_class = parser.expression(80)
+                    exc_class = parser.expression()
                     if parser.maybe_match('AS'):
-                        exc_name = parser.expression(80)
+                        exc_name = parser.expression()
                     parser.match(':')
                 body = parser.expression()
                 excepts.append(Except(body, exc_class, exc_name))
-                parser.ns.pop()
             if parser.maybe_match('FINALLY'):
-                parser.ns.push_new()
                 parser.match(':')
                 finally_body = parser.expression()
-                parser.ns.pop()
 
-            body = try_body
-            if excepts:
-                body = HandlerCase(try_body, excepts)
-            if finally_body:
-                body = UnwindProtect(body, finally_body)
-            return body
+            return HandlerCase(try_body, excepts, finally_body)
         elif value == 'from':
             module = parser.expression(80)
             import_ = parser.match('NAME')
@@ -1037,44 +909,36 @@ class Name(Token):
         elif value == 'assert':
             return Call(Symbol('muleassert'), [parser.expression()])
         elif value == 'True':
-            return LispLiteral('t')
+            return Literal('True')
         elif value == 'False':
-            return LispLiteral('nil')
+            return Literal('nil')
         elif value == 'if':
             cond_clauses = []
-            parser.ns.push_new()
             condition = parser.expression(10)
             parser.match(':')
             parser.match('NEWLINE')
             body = parser.expression()
-            parser.ns.pop()
             cond_clauses.append(CondClause(condition, body))
             while parser.maybe_match('ELIF'):
-                parser.ns.push_new()
                 condition = parser.expression(10)
                 parser.match(':')
                 parser.match('NEWLINE')
                 body = parser.expression()
-                parser.ns.pop()
                 cond_clauses.append(CondClause(condition, body))
             if parser.maybe_match('ELSE'):
-                parser.ns.push_new()
-                condition = LispLiteral('t')
+                condition = Literal('t')
                 parser.match(':')
                 parser.match('NEWLINE')
                 body = parser.expression()
-                parser.ns.pop()
                 cond_clauses.append(CondClause(condition, body))
             return Cond(cond_clauses)
         elif value == 'pass':
             return Nil()
         elif value == 'while':
-            #parser.ns.push_new()
             test = parser.expression(10)
             parser.match(':')
             parser.match('NEWLINE')
             body = parser.expression()
-            #parser.ns.pop()
             return WhileLoop(test, body)
         elif value == 'None':
             return Nil()
@@ -1084,27 +948,21 @@ class Name(Token):
             else:
                 return_expr = parser.expression(5)
             return Return(return_expr, parser.ns.return_name)
-        elif value in ('class', 'condition'):
+        elif value == 'class':
             name = parser.expression(80)
-            if value == 'class':
-                cc = CLOSClass(name)
-            else:
-                cc = Condition(name)
+            cc = Class(name)
             if parser.maybe_match('('):
                 while parser.watch(')'):
                     cc.bases.append(parser.expression(40))
                     parser.maybe_match(',')
             parser.match(':')
             parser.match('NEWLINE')
-            parser.ns.push_new(class_top_level=True)
             body = parser.expression()
-            parser.ns.pop()
             for form in body.forms:
                 cc.add_form(form)
             return cc
         elif value in ('def', 'defmethod'):
             name = parser.expression(100)
-            parser.ns.push_new(return_name=name)
             parser.match('(')
             parser.maybe_match('NEWLINE')
             arg_names = []
@@ -1122,27 +980,20 @@ class Name(Token):
             parser.match(':')
             parser.match('NEWLINE')
             body = parser.expression()
-            parser.ns.pop()
             defun = Defun(name, arg_names, kw_args, body)
             if value == 'defmethod':
                 return Method(defun)
             if parser.ns.top_level or parser.ns.class_top_level:
                 return defun
 
-            parser.ns.push_new()
-            parser.ns.add(defun.name)
             flet_node = FletLambda(
-                defun, LispBody(parser.parse_rest_of_body()))
-            parser.ns.pop()
+                defun, Body(parser.parse_rest_of_body()))
             return flet_node
         elif value == 'for':
-            in_node = parser.expression(20)
-            #parser.ns.push_new()
-            parser.ns.add(in_node.thing.name)
+            in_node = parser.expression()
             parser.match(':')
             parser.match('NEWLINE')
             body = parser.expression(10)
-            #parser.ns.pop()
             return ForLoop(in_node, body)
         elif value == 'use':
             right = parser.expression(5)
@@ -1172,7 +1023,6 @@ class LParen(Token):
 
     def led(self, parser, left):
         if left.kind in ('getattr', 'symbol', 'call', 'lookup', 'cl_literal'):
-            parser.ns.push_new(inside_form=True)
             name = left
             args = []
             kw_args = []
@@ -1188,14 +1038,13 @@ class LParen(Token):
             if left.kind == 'getattr':
                 name = left.attribute_name
                 args.insert(0, left.object_name)
-            parser.ns.pop()
             return Call(name, args, kw_args)
 
     def nud(self, parser, value):
         values = []
         comma_seen = False
         while parser.watch(')'):
-            values.append(parser.expression())
+            values.append(parser.expression(200))
             if parser.maybe_match(','):
                 comma_seen = True
         if comma_seen or not values:
@@ -1205,7 +1054,7 @@ class LParen(Token):
 
 @register
 class LBracket(Token):
-    lbp = 40
+    lbp = 140
     start_chars = {'['}
     name = '['
 
@@ -1217,11 +1066,18 @@ class LBracket(Token):
         return List(values)
 
     def led(self, parser, left):
-        key = parser.expression(40)
-        parser.match(']')
+        components = []
+        while parser.watch(']'):
+            if parser.maybe_match(':'):
+                components.append(None)
+                continue
+            components.append(parser.expression(40))
+            parser.maybe_match(':')
 
-        return GetItem(left, key)
-
+        if len(components) == 1:
+            return GetItem(left, components[0])
+        else:
+            return Slice(left, components)
 
 @register
 class LBrace(Token):
@@ -1277,7 +1133,7 @@ class At(EnumeratedToken):
         decorator_call = parser.expression()
         parser.match('NEWLINE')
         wrapped = parser.expression()
-        return LispBody([wrapped])
+        return Body([wrapped])
 
 
 class EscapingToken(Token):
@@ -1317,22 +1173,8 @@ class StringToken(EscapingToken):
             slice_off = 3
         value = value[slice_off:-slice_off]
         if self.value[0] == '`':
-            return LispLiteral(value)
+            return Literal(value)
         return String(value)
-
-
-@register
-class Tilde(EscapingToken):
-    start_chars = {'~'}
-    name = 'TILDE'
-
-    def match(self, c):
-        if self.value.endswith('\n~~'):
-            return False
-        return True
-
-    def nud(self, parser, value):
-        return LispLiteral(''.join(value.splitlines()[1:-1]))
 
 
 @register
@@ -1348,7 +1190,7 @@ class Newline(Token):
 class Comma(Token):
     name = ','
     start_chars = ','
-    lbp = 30
+    lbp = 10
 
     def led(self, parser, left):
         values = [left, parser.expression(30)]

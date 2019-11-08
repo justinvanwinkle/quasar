@@ -118,7 +118,7 @@ class PrattParser(object):
         self.feed()
 
         left = t.nud(self, v)
-        self.log('starting with left %s', left)
+        self.log('starting with left %s (%s)', left, left.kind)
         self.log('looping? %s rbp %s lbp %s',
                  self.token_handler,
                  rbp,
