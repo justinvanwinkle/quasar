@@ -60,7 +60,7 @@ class Comment(Lisp):
         self.comment = comment
 
     def cl(self):
-        return '# %s' % self.comment
+        return 'Comment<%r>' % self.comment
 
 
 class Quote(Lisp):
@@ -79,6 +79,9 @@ class LispBody(Lisp):
     def __init__(self, forms):
         self.forms = forms
 
+    def __repr__(self):
+        return f'Progn<{self.forms}]'
+
     def cl(self, force_progn=False, implicit_body=False):
         if implicit_body and not force_progn:
             return '\n'.join(self.clmap(self.forms))
@@ -91,14 +94,6 @@ class LispBody(Lisp):
             return 'nil'
 
 
-class MakePackage(Lisp):
-    def __init__(self, name):
-        self.name = name
-
-    def cl(self):
-        return '(make-package "%s")' % self.name
-
-
 class LispPackage(Lisp):
     kind = 'package'
 
@@ -106,9 +101,11 @@ class LispPackage(Lisp):
         self.module_name = module_name
         self.block = block
 
+    def __repr__(self):
+        return f'Module<{self.module_name}>[{self.block}]'
+
     def cl(self):
         forms = []
-        forms.append(MakePackage(self.module_name).cl())
         forms.append(self.block.cl(implicit_body=True))
         return ''.join(forms)
 
@@ -238,6 +235,10 @@ class Defun(Lisp):
         self.kw_args = kw_args
         self.body = body
 
+    def __repr__(self):
+        return (
+            f'def <{self.name}({self.arg_names}, {self.kw_args}: {self.body}>')
+
     def cl_kw_args(self):
         if not self.kw_args:
             return ''
@@ -310,6 +311,9 @@ class ForLoop(Lisp):
     def __init__(self, in_node, body):
         self.in_node = in_node
         self.body = body
+
+    def __repr__(self):
+        return f'FOR<{self.in_node} {self.body}>'
 
     def cl(self):
         collection = self.in_node.collection
@@ -418,6 +422,9 @@ class Symbol(Lisp):
         self.name = name
         self.namespace = namespace
 
+    def __repr__(self):
+        return f'Name<{self.name}>'
+
     def cl(self):
         if self.namespace is not None:
             return '|%s|:|%s|' % (self.namespace, self.symbol)
@@ -522,6 +529,9 @@ class Call(Lisp):
         self.args = args
         self.kw_args = kw_args
 
+    def __repr__(self):
+        return f'Call<{self.name}({self.args}, {self.kw_args})>'
+
     def cl_kw_args(self):
         forms = []
         for k, v in self.kw_args:
@@ -580,6 +590,9 @@ class DefParameter(Lisp):
     def __init__(self, left, right):
         self.left = left
         self.right = right
+
+    def __repr__(self):
+        return f'Assign<{self.left}={self.right}>'
 
     def cl(self):
         return '(CL:DEFPARAMETER %s %s)' % (self.left.cl(), self.right.cl())
@@ -666,6 +679,9 @@ class BinaryOperator(Lisp):
         self.left = left
         self.right = right
 
+    def __repr__(self):
+        return f'Binop<{self.left}{self.op}{self.right}>'
+
     def cl(self):
         return '(%s %s %s)' % (self.op, self.left.cl(), self.right.cl())
 
@@ -693,6 +709,9 @@ class String(Lisp):
 
     def __init__(self, value):
         self.value = value
+
+    def __repr__(self):
+        return repr(self.value)
 
     def cl(self):
         return '"%s"' % self.value

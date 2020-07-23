@@ -1,6 +1,10 @@
-from pratt import PrattParser
-
 from sys import stdout
+
+from .pratt import PrattParser
+from .token_defs import Block
+from .token_defs import Endblock
+from .token_defs import Module
+from .token_defs import all_ops
 
 
 class Namespace(object):
@@ -104,10 +108,6 @@ class MuleParser(PrattParser):
         self.ns = NamespaceStack()
 
     def _munge_tokens(self, tokens):
-        from token_defs import Block
-        from token_defs import Endblock
-        from token_defs import Module
-
         class Fake:
             name = None
 
@@ -204,8 +204,6 @@ if __name__ == '__main__':
     from os.path import splitext
     from os.path import split
 
-    from token_defs import all_ops
-
     argparser = argparse.ArgumentParser(description='Python to CL compiler')
     argparser.add_argument('mule_fn', help='input file')
     argparser.add_argument('lisp_fn', nargs='?', help='output file')
@@ -230,7 +228,7 @@ if __name__ == '__main__':
             f = open(args.lisp_fn, 'w')
         else:
             print('\n\n')
-        print(result.cl(), file=f)
+        print(result, file=f)
         if args.lisp_fn:
             f.close()
     except Exception:
