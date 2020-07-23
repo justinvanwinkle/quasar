@@ -60,7 +60,7 @@ class Comment(Lisp):
         self.comment = comment
 
     def cl(self):
-        return '#|%s|#' % self.comment
+        return '# %s' % self.comment
 
 
 class Quote(Lisp):
@@ -348,7 +348,7 @@ class CondClause(Lisp):
         self.body = body
 
     def cl(self):
-        return '(%s %s)' % (self.condition, self.body)
+        return '%s:\n %s' % (self.condition, self.body)
 
 
 class Cond(Lisp):
@@ -358,7 +358,7 @@ class Cond(Lisp):
         self.clauses = clauses
 
     def cl(self):
-        return '(COND %s)' % ' '.join('%s' % c for c in self.clauses)
+        return 'if %s' % ' '.join('%s' % c for c in self.clauses)
 
 
 class UnwindProtect(Lisp):
@@ -444,6 +444,9 @@ class In(Lisp):
         self.thing = thing
         self.collection = collection
 
+    def cl(self):
+        return '%s in %s' % (self.thing, self.collection)
+
 
 class Find(In):
     kind = 'find'
@@ -490,6 +493,17 @@ class GetItem(Lisp):
         return '(|getitem| %s %s)' % (self.left, self.key)
 
 
+class Slice(Lisp):
+    kind = 'slice'
+
+    def __init__(self, left, components):
+        self.left = left
+        self.components = components
+
+    def cl(self):
+        return '[%s]' % ':'.join(self.components)
+
+
 class Tuple(Lisp):
     kind = 'tuple'
 
@@ -497,7 +511,7 @@ class Tuple(Lisp):
         self.values = values
 
     def cl(self):
-        return "(|tuple| '(%s))" % ' '.join(self.clmap(self.values))
+        return "(%s,)" % ', '.join(self.clmap(self.values))
 
 
 class Call(Lisp):
@@ -546,7 +560,7 @@ class Equality(Lisp):
         self.right = right
 
     def cl(self):
-        return '(|__eq__| %s %s)' % (self.left.cl(), self.right.cl())
+        return '%s==%s' % (self.left.cl(), self.right.cl())
 
 
 class NotEquality(Lisp):
@@ -594,7 +608,7 @@ class Setf(Lisp):
         self.right = right
 
     def cl(self):
-        return '(CL:SETF %s %s)' % (self.left, self.right)
+        return '%s = %s' % (self.left, self.right)
 
 
 class Let(Lisp):
@@ -617,8 +631,8 @@ class Let(Lisp):
         for declare in declares:
             self.body.forms.insert(0, declare)
 
-        return '(CL:LET (%s)\n%s)' % (
-            ' '.join('(%s %s)' % (l, r) for l, r in pairs),
+        return '%s %s' % (
+            '\n'.join('%s = %s' % (l, r) for l, r in pairs),
             self.body.cl(implicit_body=True))
 
 
@@ -664,8 +678,7 @@ class AttrLookup(Lisp):
         self.attribute_name = attribute_name
 
     def cl(self):
-        return "(CL:SLOT-VALUE %s '%s)" % (self.object_name,
-                                           self.attribute_name)
+        return "%s.%s" % (self.object_name, self.attribute_name)
 
 
 class Splat(Lisp):
@@ -787,6 +800,7 @@ class BinOpToken(EnumeratedToken):
         '<': 40,
         '<<': 0,
         '>': 40,
+        '>=': 40,
         '>>': 0,
         '^': 45,
         '|': 0}
@@ -972,15 +986,21 @@ class Name(Token):
     def nud(self, parser, value):
         if value == 'raise':
             kw_args = []
+            if parser.maybe_match('NEWLINE'):
+                return Call('CL:ERROR')
             exception_class = parser.expression(80)
             if parser.maybe_match('('):
                 while parser.watch(')'):
+                    arg_names = []
+                    kw_args = []
                     arg_name = parser.expression(40)
-                    parser.match('=')
-                    kw_args.append((arg_name, parser.expression(40)))
-                    parser.maybe_match('NEWLINE')
-                    parser.maybe_match(',')
-                    parser.maybe_match('NEWLINE')
+                    if parser.maybe_match('='):
+                        kw_args.append((arg_name, parser.expression(40)))
+                    else:
+                        arg_names.append(arg_name)
+                        parser.maybe_match('NEWLINE')
+                        parser.maybe_match(',')
+                        parser.maybe_match('NEWLINE')
 
             return Call('CL:ERROR', [Quote(exception_class)], kw_args)
         if value == 'try':
@@ -1137,8 +1157,6 @@ class Name(Token):
             return flet_node
         elif value == 'for':
             in_node = parser.expression(20)
-            #parser.ns.push_new()
-            parser.ns.add(in_node.thing.name)
             parser.match(':')
             parser.match('NEWLINE')
             body = parser.expression(10)
@@ -1217,11 +1235,18 @@ class LBracket(Token):
         return List(values)
 
     def led(self, parser, left):
-        key = parser.expression(40)
-        parser.match(']')
+        components = []
+        while parser.watch(']'):
+            if parser.maybe_match(':'):
+                components.append(None)
+                continue
+            components.append(parser.expression(40))
+            parser.maybe_match(':')
 
-        return GetItem(left, key)
-
+        if len(components) == 1:
+            return GetItem(left, components[0])
+        else:
+            return Slice(left, components)
 
 @register
 class LBrace(Token):
