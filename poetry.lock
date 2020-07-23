@@ -119,14 +119,6 @@ python-versions = "*"
 version = "0.7.5"
 
 [[package]]
-category = "main"
-description = "UNKNOWN"
-name = "pratt"
-optional = false
-python-versions = "*"
-version = "0.1.1"
-
-[[package]]
 category = "dev"
 description = "Library for building powerful interactive command lines in Python"
 name = "prompt-toolkit"
@@ -187,7 +179,7 @@ python-versions = "*"
 version = "0.2.5"
 
 [metadata]
-content-hash = "66ad0d0a83b712e0f05d49838bf8d42b529021efc9ef8e4469ec4d36aeb5f573"
+content-hash = "ad62a713555de5a01dfa751edc1f08405028401280e3b1dcd8e0ca96e1b4fe78"
 lock-version = "1.0"
 python-versions = "^3.8"
 
@@ -231,9 +223,6 @@ pexpect = [
 pickleshare = [
     {file = "pickleshare-0.7.5-py2.py3-none-any.whl", hash = "sha256:9649af414d74d4df115d5d718f82acb59c9d418196b7b4290ed47a12ce62df56"},
     {file = "pickleshare-0.7.5.tar.gz", hash = "sha256:87683d47965c1da65cdacaf31c8441d12b8044cdec9aca500cd78fc2c683afca"},
-]
-pratt = [
-    {file = "pratt-0.1.1.tar.gz", hash = "sha256:615637237964d338178cd9908bdc76771bd53fa22cd3ac420d01fdcbeede9bd5"},
 ]
 prompt-toolkit = [
     {file = "prompt_toolkit-3.0.5-py3-none-any.whl", hash = "sha256:df7e9e63aea609b1da3a65641ceaf5bc7d05e0a04de5bd45d05dbeffbabf9e04"},
