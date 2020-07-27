@@ -40,7 +40,7 @@ def register(cls):
     return cls
 
 
-class Lisp(object):
+class Lisp:
     kind = 'node'
 
     def __repr__(self):
@@ -728,7 +728,7 @@ class LispLiteral(Lisp):
         return self.literal
 
 
-class Token(object):
+class Token:
     name = None
     lbp = 0
     start_chars = set()

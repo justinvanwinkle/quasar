@@ -7,7 +7,7 @@ from .token_defs import Module
 from .token_defs import all_ops
 
 
-class Namespace(object):
+class Namespace:
     def __init__(self,
                  return_name=None,
                  class_top_level=False,
@@ -35,7 +35,7 @@ class Namespace(object):
             ', '.join(self.s))
 
 
-class NamespaceStack(object):
+class NamespaceStack:
     def __init__(self):
         self.stack = []
 
