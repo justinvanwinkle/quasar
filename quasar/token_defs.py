@@ -634,18 +634,18 @@ class Let(Lisp):
     def cl(self):
         declares = []
         pairs = []
-        for l, r in self.pairs:
-            if l.kind == 'type':
+        for left, r in self.pairs:
+            if left.kind == 'type':
                 declares.append(Call('DECLARE',
-                                     [Call('TYPE', [l.type, l.left])]))
-                pairs.append((l.left, r))
+                                     [Call('TYPE', [left.type, left.left])]))
+                pairs.append((left.left, r))
             else:
-                pairs.append((l, r))
+                pairs.append((left, r))
         for declare in declares:
             self.body.forms.insert(0, declare)
 
         return '%s %s' % (
-            '\n'.join('%s = %s' % (l, r) for l, r in pairs),
+            '\n'.join('%s = %s' % (left, r) for left, r in pairs),
             self.body.cl(implicit_body=True))
 
 
@@ -1108,12 +1108,12 @@ class Name(Token):
         elif value == 'pass':
             return Nil()
         elif value == 'while':
-            #parser.ns.push_new()
+            # parser.ns.push_new()
             test = parser.expression(10)
             parser.match(':')
             parser.match('NEWLINE')
             body = parser.expression()
-            #parser.ns.pop()
+            # parser.ns.pop()
             return WhileLoop(test, body)
         elif value == 'None':
             return Nil()
@@ -1179,7 +1179,7 @@ class Name(Token):
             parser.match(':')
             parser.match('NEWLINE')
             body = parser.expression(10)
-            #parser.ns.pop()
+            # parser.ns.pop()
             return ForLoop(in_node, body)
         elif value == 'use':
             right = parser.expression(5)
@@ -1267,6 +1267,7 @@ class LBracket(Token):
         else:
             return Slice(left, components)
 
+
 @register
 class LBrace(Token):
     lbp = 40
@@ -1318,7 +1319,8 @@ class At(EnumeratedToken):
     name = '@'
 
     def nud(self, parser, value):
-        decorator_call = parser.expression()
+        # decorator_call = parser.expression()
+        parser.expression()
         parser.match('NEWLINE')
         wrapped = parser.expression()
         return LispBody([wrapped])
