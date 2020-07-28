@@ -226,16 +226,14 @@ if __name__ == '__main__':
         f = stdout
         if args.lisp_fn:
             f = open(args.lisp_fn, 'w')
-        else:
-            print('\n\n')
         print(result, file=f)
         if args.lisp_fn:
             f.close()
     except Exception:
         line_no = mule_parser.token_handler.line
         column_no = mule_parser.token_handler.column
-        lines = mule_parser.code.splitlines()[max(line_no - 5, 0):line_no]
+        lines = mule_parser.code.splitlines()[max(line_no - 5, 0):line_no + 1]
         print('line %s column %s\n' % (line_no, column_no))
         print('\n'.join(lines))
-        print(' ' * (column_no - 1) + '^^^')
+        print(' ' * (column_no) + '^^^')
         raise

@@ -5,6 +5,8 @@ class PrattParser:
     def __init__(self, code, token_defs, filename=None):
         self.code = code
         self.filename = filename
+        self.depth = 0
+
         self.registered = []
         self.token_handler = None
         self.token_value = None
@@ -23,7 +25,8 @@ class PrattParser:
 
     def log(self, s, *args):
         if self.debug:
-            print(s % tuple([repr(x) for x in args]), file=stderr)
+            print('    ' * self.depth + s % tuple([repr(x) for x in args]),
+                  file=stderr)
 
     def register(self, token_def):
         self.registered.append(token_def)
@@ -42,9 +45,12 @@ class PrattParser:
         tokens = []
         token = None
 
-        column = 1
-        line = 1
+        column = 0
+        line = 0
         for c in self.code:
+            if c == '\\':
+                continue  # This is probably not valid
+
             if token and token.match(c):
                 token = token.handle(c)
             else:
@@ -58,12 +64,9 @@ class PrattParser:
 
             column += 1
             if c == '\n':
-                column = 1
+                column = 0
                 line += 1
 
-        if token is not None:
-            complete = token.complete()
-            assert complete
         return tokens
 
     @property
@@ -113,6 +116,7 @@ class PrattParser:
         return self.expression()
 
     def expression(self, rbp=0):
+        self.depth += 1
         t = self.token_handler
         v = self.token_value
         self.feed()
@@ -132,5 +136,6 @@ class PrattParser:
             self.log('rbp %s lbp %s', rbp, self.token_handler.lbp)
         else:
             self.log('no loop')
+        self.depth -= 1
 
         return left

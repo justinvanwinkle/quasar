@@ -1,4 +1,4 @@
-import tokenize
+import tokenize as tokenize
 from io import StringIO
 
 from .token_names import token_names
