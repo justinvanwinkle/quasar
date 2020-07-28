@@ -73,6 +73,17 @@ class FSTNode:
     def cl(self):
         return f'NODE {self.kind}'
 
+    def to_dict(self):
+        d = {}
+        d['kind'] = self.kind
+
+        for key, value in self.__dict__.items():
+            if hasattr(value, 'to_dict'):
+                d[key] = value.to_dict()
+            else:
+                d[key] = value
+        return d
+
 
 class PythonTrue(FSTNode):
     def cl(self):
@@ -145,6 +156,10 @@ class PythonBody(FSTNode):
                 rep += indent + line + '\n'
 
         return rep
+
+    def to_dict(self):
+        return {'kind': self.kind,
+                'forms': [form.to_dict() for form in self.forms]}
 
 
 class PythonModule(FSTNode):
@@ -624,13 +639,12 @@ class BinaryOperator(FSTNode):
         return f'({self.left} {self.op} {self.right})'
 
 
-
 class AttrLookup(FSTNode):
     kind = 'getattr'
 
     def __init__(self, left, name):
+        self.name = name.name
         self.left = left
-        self.name = name
 
     def cl(self):
         return f"AttrLookup<{self.left}.{self.name}>"

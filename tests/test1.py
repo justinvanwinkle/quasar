@@ -1,3 +1,5 @@
+w.x.y.z = 'bub'
+
 
 def foo(bub):
     print('foo')

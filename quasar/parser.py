@@ -104,6 +104,8 @@ class NamespaceStack:
 
 class MuleParser(PrattParser):
     def __init__(self, code, token_defs, filename=None):
+        if not code.endswith('\n'):
+            code += '\n'
         PrattParser.__init__(self, code, token_defs, filename=filename)
         self.ns = NamespaceStack()
 
