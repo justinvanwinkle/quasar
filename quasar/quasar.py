@@ -59,7 +59,8 @@ def main(args):
 if __name__ == '__main__':
     import argparse
 
-    argparser = argparse.ArgumentParser(description='Python to CL compiler')
+    argparser = argparse.ArgumentParser(
+        description='Python code (re)formatter')
     argparser.add_argument('fn', help='input file')
     argparser.add_argument('-d', '--debug',
                            action='store_true',
