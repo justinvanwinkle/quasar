@@ -1,7 +1,7 @@
 from pprint import pprint
 
-from quasar.token_defs import all_ops
 from quasar.parser import MuleParser
+from quasar.token_defs import all_ops
 
 simple_class = """\
 class MuhClass:
