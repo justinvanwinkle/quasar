@@ -65,13 +65,10 @@ class FSTNode:
     kind = 'node'
 
     def __repr__(self):
-        return self.cl()
+        return '<<' + repr(self.to_dict()) + '>>'
 
     def clmap(self, forms):
         return ['%s' % x for x in forms]
-
-    def cl(self):
-        return f'NODE {self.kind}'
 
     def to_dict(self):
         d = {}
@@ -180,7 +177,6 @@ class Method(FSTNode):
         self.defun = defun
         self.class_name = class_name
         self.first_arg = defun.arg_names[0]
-
 
     def cl(self):
         return f'Method {self.defun}'
@@ -1176,7 +1172,6 @@ class Name(Token):
         elif self.value == 'and':
             return BinaryOperator('AND', left, parser.expression())
         raise Exception('Cannot get here?')
-
 
 
 @register
