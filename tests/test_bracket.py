@@ -1,6 +1,6 @@
 
 
-
+code = """\
 l = []
 
 l = [[]]
@@ -23,3 +23,4 @@ l = [[[[]]].bub for x in [[[], []]] if True]
 
 for x in [x for x in l if x.is_good]:
     print(x)
+"""
