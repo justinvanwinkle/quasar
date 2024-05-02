@@ -1,10 +1,9 @@
-import tokenize as tokenize
+import tokenize
 from io import StringIO
 
-from .token_names import token_names
 from .parser import grammar
 from .pratt import Parser
-
+from .token_names import token_names
 
 statements = {'def', 'class', 'assert'}
 

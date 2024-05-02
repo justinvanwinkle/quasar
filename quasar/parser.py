@@ -1,10 +1,10 @@
 from sys import stdout
 
 from .pratt import PrattParser
+from .token_defs import all_ops
 from .token_defs import Block
 from .token_defs import Endblock
 from .token_defs import Module
-from .token_defs import all_ops
 
 
 class Namespace:
@@ -203,8 +203,8 @@ class MuleParser(PrattParser):
 
 if __name__ == '__main__':
     import argparse
-    from os.path import splitext
     from os.path import split
+    from os.path import splitext
 
     argparser = argparse.ArgumentParser(description='Python to CL compiler')
     argparser.add_argument('mule_fn', help='input file')
