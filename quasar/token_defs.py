@@ -101,6 +101,8 @@ class PythonFalse(FSTNode):
 
 
 class DictLiteral(FSTNode):
+    kind = 'dict'
+
     def __init__(self, pairs):
         self.pairs = pairs
 
@@ -110,6 +112,8 @@ class DictLiteral(FSTNode):
 
 
 class SetLiteral(FSTNode):
+    kind = 'set'
+
     def __init__(self, values):
         self.values = values
 
@@ -759,25 +763,28 @@ class NoDispatchTokens(EnumeratedToken):
         ']': 0,
         '}': 0}
 
+    def nud(self, parser, value):
+        raise SyntaxError(f'Unexpected token {value} in expression context')
+
 
 @register
 class BinOpToken(EnumeratedToken):
     lbp_map = {
-        '%': 60,
-        '&': 0,
-        '*': 60,
-        '**': 0,
-        '+': 50,
-        '-': 50,
-        '/': 60,
-        '//': 60,
-        '<': 40,
-        '<<': 0,
-        '>': 40,
-        '>=': 40,
-        '>>': 0,
-        '^': 45,
-        '|': 0}
+        '%': 120,   # Modulo - same as *, /
+        '&': 90,    # Bitwise AND
+        '*': 120,   # Multiplication
+        '**': 140,  # Exponentiation (highest binary op)
+        '+': 110,   # Addition
+        '-': 110,   # Subtraction
+        '/': 120,   # Division
+        '//': 120,  # Floor division
+        '<': 60,    # Less than
+        '<<': 100,  # Left shift
+        '>': 60,    # Greater than
+        '>=': 60,   # Greater equal
+        '>>': 100,  # Right shift
+        '^': 80,    # Bitwise XOR
+        '|': 70}    # Bitwise OR
 
     op_map = {
         '^': 'LOGXOR',
@@ -845,8 +852,8 @@ class Colon(Token):
 @register
 class AssignOrEquals(EnumeratedToken):
     lbp_map = {
-        '==': 40,
-        '=': 10}
+        '==': 60,  # Equality comparison
+        '=': 10}   # Assignment (lowest precedence)
 
     def led(self, parser, left):
         if self.value == '=':
@@ -875,7 +882,7 @@ class AssignOrEquals(EnumeratedToken):
 
 @register
 class NotEqual(EnumeratedToken):
-    lbp_map = {'!=': 40}
+    lbp_map = {'!=': 60}  # Same as other comparisons
 
     def led(self, parser, left):
         return NotEquality(left, parser.expression())
@@ -908,6 +915,9 @@ class Endblock(Token):
     lbp = 0
     name = 'ENDBLOCK'
 
+    def nud(self, parser, value):
+        raise SyntaxError('Unexpected end of block in expression context')
+
 
 @register
 class Name(Token):
@@ -920,13 +930,13 @@ class Name(Token):
         value = self.value
         if value == 'in':
             self.name = 'IN'
-            self.lbp = 150
+            self.lbp = 60   # Same as other comparisons
         elif value == 'is':
             self.name = 'IS'
-            self.lbp = 140
+            self.lbp = 60   # Same as other comparisons
         elif value == 'for':
             self.name = 'for'
-            self.lbp = 120
+            self.lbp = 20   # For comprehensions
         elif value == 'elif':
             self.name = 'ELIF'
         elif value == 'else':
@@ -941,10 +951,10 @@ class Name(Token):
             self.name = 'AS'
         elif value == 'and':
             self.name = 'AND'
-            self.lbp = 20
+            self.lbp = 40   # Boolean AND
         elif value == 'not':
             self.name = 'NOT'
-            self.lbp = 50
+            self.lbp = 50   # Boolean NOT (unary)
 
         return True
 
@@ -1026,7 +1036,7 @@ class Name(Token):
             if parser.maybe_match('AS'):
                 alias = parser.expression(0)
 
-            parser.match('NEWLINE')
+            parser.maybe_match('NEWLINE')
             return Import(module, values, alias=alias)
 
         elif value == 'export':
@@ -1183,7 +1193,7 @@ class Name(Token):
 @register
 class LParen(Token):
     name = '('
-    lbp = 70
+    lbp = 150  # Function calls have high precedence
     start_chars = {'('}
     callable_lefts = {'getitem',
                       'getattr',
@@ -1225,7 +1235,7 @@ class LParen(Token):
 
 @register
 class LBracket(Token):
-    lbp = 5
+    lbp = 150  # High precedence for indexing/slicing
     start_chars = {'['}
     name = '['
 
@@ -1239,14 +1249,27 @@ class LBracket(Token):
 
     def led(self, parser, left):
         components = []
+        is_slice = False
+
         while parser.watch(']'):
-            if parser.maybe_match(':'):
+            # Parse component if there is one
+            if parser.token_handler.name not in (':', ']'):
+                component = parser.expression(20)
+                components.append(component)
+            else:
                 components.append(None)
+
+            # Check for colon (slice indicator)
+            if parser.maybe_match(':'):
+                is_slice = True
+                # After colon, we might have another component or nothing
                 continue
-            component = parser.expression(20)
-            components.append(component)
-            parser.maybe_match(':')
-        if len(components) == 1:
+            else:
+                # No colon, we're done with this component
+                break
+
+        # If it's a simple index access (no colons), return GetItem
+        if not is_slice and len(components) == 1 and components[0] is not None:
             return GetItem(left, components[0])
         else:
             return Slice(left, components)
@@ -1254,7 +1277,7 @@ class LBracket(Token):
 
 @register
 class LBrace(Token):
-    lbp = 40
+    lbp = 0   # Dict/set literals are primary expressions
     start_chars = {'{'}
     name = '{'
 
@@ -1262,19 +1285,18 @@ class LBrace(Token):
         key_vals = []
         cls = 'set'
         while parser.watch('}'):
-            key = parser.expression()
+            key = parser.expression(40)  # Parse at higher precedence to avoid comma operators
             if parser.maybe_match(':'):
-                cls = 'set'
-            if cls == 'dict':
-                val = parser.expression()
+                cls = 'dict'
+                val = parser.expression(40)
             else:
                 val = None
             key_vals.append((key, val))
+            parser.maybe_match(',')
         if cls == 'dict':
             return DictLiteral(key_vals)
         else:
-            return SetLiteral(key_val[0] for key_val in key_vals)
-        parser.log('%s', key_vals)
+            return SetLiteral([key_val[0] for key_val in key_vals])
 
 
 @register
@@ -1289,7 +1311,7 @@ class NumberToken(Token):
 
 @register
 class Dot(Token):
-    lbp = 150
+    lbp = 150  # Attribute access has high precedence
     start_chars = {'.'}
     name = 'DOT'
 
@@ -1303,7 +1325,7 @@ class Dot(Token):
 @register
 class At(EnumeratedToken):
     lbp_map = {
-        '@': 0}
+        '@': 0}  # Decorators are statement-level
     name = '@'
 
     def nud(self, parser, value):
@@ -1382,12 +1404,12 @@ class Newline(Token):
 class Comma(Token):
     name = ','
     start_chars = ','
-    lbp = 30
+    lbp = 15  # Comma has very low precedence
 
     def led(self, parser, left):
-        values = [left, parser.expression(30)]
+        values = [left, parser.expression(15)]
         while parser.maybe_match(','):
-            values.append(parser.expression(30))
+            values.append(parser.expression(15))
 
         return Tuple(values)
 

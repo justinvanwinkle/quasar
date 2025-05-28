@@ -105,7 +105,7 @@ def test_complex_operator_precedence():
     expr = assignment.right
 
     # Should respect Python operator precedence:
-    # ** (power) > *, /, % > +, - 
+    # ** (power) > *, /, % > +, -
     # And be left-associative for same precedence
     assert expr.kind == 'binary_op'
 
@@ -218,7 +218,7 @@ def func():
 
     func = root.body.forms[0]
     assert func.kind == 'defun'
-    
+
     # Docstring might be parsed as first statement in body
     body_forms = func.body.forms
     if len(body_forms) > 1:

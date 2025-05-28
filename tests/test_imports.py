@@ -51,7 +51,7 @@ def test_from_import_multiple():
     assert import_stmt.kind == 'import'
     assert import_stmt.module.name == 'os'
     assert len(import_stmt.symbols) == 3
-    
+
     symbol_names = [sym.name for sym in import_stmt.symbols]
     assert 'path' in symbol_names
     assert 'environ' in symbol_names
@@ -139,11 +139,11 @@ else:
 
     cond_stmt = root.body.forms[0]
     assert cond_stmt.kind == 'cond'
-    
+
     # First clause should contain from import
     if_body = cond_stmt.clauses[0].body
     assert if_body.forms[0].kind == 'import'
-    
+
     # Else clause should contain import with alias
     else_body = cond_stmt.clauses[1].body
     assert else_body.forms[0].kind == 'import'
@@ -155,7 +155,7 @@ def test_export_statement():
     try:
         p = MuleParser(code, all_ops, filename='test.py')
         root = p.parse()
-        
+
         export_stmt = root.body.forms[0]
         if hasattr(export_stmt, 'kind') and export_stmt.kind == 'export':
             assert len(export_stmt.values) == 3
@@ -175,7 +175,7 @@ def lazy_import():
 
     func = root.body.forms[0]
     assert func.kind == 'defun'
-    
+
     func_body = func.body.forms
     assert len(func_body) == 2
     assert func_body[0].kind == 'import'  # import statement
