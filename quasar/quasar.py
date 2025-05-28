@@ -1,9 +1,9 @@
 import tokenize
 from io import StringIO
-
-from quasar.token_defs import all_ops
-from quasar.parser import MuleParser
 from tokenize import tok_name as token_names
+
+from quasar.parser import MuleParser
+from quasar.token_defs import all_ops
 
 statements = {'def', 'class', 'assert'}
 

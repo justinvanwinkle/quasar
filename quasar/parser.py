@@ -5,6 +5,7 @@ from quasar.token_defs import all_ops
 from quasar.token_defs import Block
 from quasar.token_defs import Endblock
 from quasar.token_defs import Module
+from quasar.token_defs import Precedence
 
 
 class Namespace:
@@ -190,8 +191,10 @@ class MuleParser(PrattParser):
         while self.watch('ENDBLOCK', consume=False):
             while self.maybe_match('NEWLINE'):
                 pass
-            form = self.expression()
-            forms.append(form)
+            # Only parse an expression if we're not at ENDBLOCK after consuming newlines
+            if self.watch('ENDBLOCK', consume=False):
+                form = self.expression(Precedence.FULL_EXPRESSION)
+                forms.append(form)
             while self.maybe_match('NEWLINE'):
                 pass
         return forms

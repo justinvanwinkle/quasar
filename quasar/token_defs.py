@@ -131,11 +131,21 @@ class FSTNode:
 
 
 class PythonTrue(FSTNode):
+    kind = 'symbol'
+
+    def __init__(self):
+        self.name = 'True'
+
     def cl(self):
         return '_True_'
 
 
 class PythonFalse(FSTNode):
+    kind = 'symbol'
+
+    def __init__(self):
+        self.name = 'False'
+
     def cl(self):
         return '_False_'
 
@@ -374,6 +384,18 @@ class ForLoop(FSTNode):
 
     def cl(self):
         return f'FOR {self.in_node}\n{self.body}'
+
+
+class ConditionalExpression(FSTNode):
+    kind = 'conditional'
+
+    def __init__(self, true_expr, condition, false_expr):
+        self.true_expr = true_expr
+        self.condition = condition
+        self.false_expr = false_expr
+
+    def cl(self):
+        return f'{self.true_expr} if {self.condition} else {self.false_expr}'
 
 
 class ForExpression(FSTNode):
@@ -766,6 +788,9 @@ class Token:
         self.value += c
         return self
 
+    def nud(self, parser, value):
+        raise NotImplementedError
+
     def __repr__(self):
         return '( %r %s )' % (self.value, self.name)
 
@@ -904,6 +929,7 @@ class AssignOrEquals(EnumeratedToken):
         '==': Precedence.IN_IS,
         '=': Precedence.ASSIGNMENT}
 
+
     def led(self, parser, left):
         if self.value == '=':
             if left.kind == 'tuple':
@@ -975,6 +1001,17 @@ class Name(Token):
     start_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_')
     rest_chars = start_chars | set('0123456789')
 
+    @classmethod
+    def can_start(cls, c):
+        # Check if character can start an identifier (ASCII or Unicode)
+        return c in cls.start_chars or (c.isalpha() and c.isprintable())
+
+    def match(self, c):
+        # Check if character can continue an identifier
+        return (c in self.rest_chars or
+                (c.isalnum() and c.isprintable()) or
+                c == '_')
+
     def complete(self):
         value = self.value
         if value == 'in':
@@ -1001,6 +1038,9 @@ class Name(Token):
         elif value == 'and':
             self.name = 'AND'
             self.lbp = Precedence.AND
+        elif value == 'if':
+            self.name = 'IF'
+            self.lbp = Precedence.CONDITIONAL
         elif value == 'not':
             self.name = 'NOT'
             self.lbp = Precedence.NOT
@@ -1075,11 +1115,17 @@ class Name(Token):
 
             import_ = parser.match('NAME')
             assert import_.value == 'import'
-            seq = parser.expression()
-            if seq.kind in ('symbol', 'cl_literal'):
-                values = [seq]
+
+            # Handle star import specially
+            if parser.token_handler.name == '*':
+                parser.match('*')
+                values = [Symbol('*')]  # Create a symbol for star import
             else:
-                values = seq.values
+                seq = parser.expression()
+                if seq.kind in ('symbol', 'cl_literal'):
+                    values = [seq]
+                else:
+                    values = seq.values
 
             alias = None
             if parser.maybe_match('AS'):
@@ -1160,7 +1206,7 @@ class Name(Token):
             return Yield(return_expr)
 
         elif value in ('class', 'condition'):
-            name = parser.expression(Precedence.NAME_CONTEXT)  # Parse class/condition name
+            name = parser.expression(Precedence.NAME_LITERAL)  # Parse just the class/condition name
             if value == 'class':
                 cc = CLOSClass(name)
             else:
@@ -1236,6 +1282,12 @@ class Name(Token):
             return ForExpression(left, in_node)
         elif self.value == 'and':
             return BinaryOperator('AND', left, parser.expression(Precedence.AND))
+        elif self.value == 'if':
+            # Parse: left if condition else right
+            condition = parser.expression(Precedence.OR)  # Use OR precedence for condition
+            parser.match('ELSE')
+            false_expr = parser.expression(Precedence.CONDITIONAL)
+            return ConditionalExpression(left, condition, false_expr)
         raise Exception('Cannot get here?')
 
 
@@ -1274,7 +1326,8 @@ class LParen(Token):
         values = []
         comma_seen = False
         while parser.watch(')'):
-            values.append(parser.expression())
+            # Parse with precedence higher than comma to handle it manually
+            values.append(parser.expression(Precedence.COMMA + 1))
             if parser.maybe_match(','):
                 comma_seen = True
         if comma_seen or not values:
@@ -1321,7 +1374,7 @@ class LBracket(Token):
             else:
                 # No colon, we're done
                 break
-        
+
         # Consume the closing ]
         parser.match(']')
 
@@ -1464,9 +1517,21 @@ class Comma(Token):
     lbp = Precedence.COMMA
 
     def led(self, parser, left):
-        values = [left, parser.expression(Precedence.COMMA)]
-        while parser.maybe_match(','):
+        values = [left]
+        # Try to parse the next expression, but handle the case where
+        # there's nothing valid to parse (like trailing comma before assignment)
+        try:
             values.append(parser.expression(Precedence.COMMA))
+        except (NotImplementedError, SyntaxError):
+            # This handles trailing comma case - no second expression to parse
+            pass
+
+        while parser.maybe_match(','):
+            try:
+                values.append(parser.expression(Precedence.COMMA))
+            except (NotImplementedError, SyntaxError):
+                # Handle trailing comma in multi-element case
+                break
 
         return Tuple(values)
 

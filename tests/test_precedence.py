@@ -219,9 +219,10 @@ def test_parentheses_override():
 def test_assignment_precedence():
     """Test that assignment has lowest precedence."""
     # This is tested implicitly since we wrap everything in "result = ..."
-    # Assignment precedence is demonstrated by the fact that all our tests
-    # work correctly with "result = expression" parsing
-    pass
+    # But let's test compound assignment if available
+    parse_expr("x if True else y")
+    # Conditional expressions should bind looser than most things
+    # but this might not be implemented yet
 
 
 def run_precedence_demonstration():
