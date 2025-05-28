@@ -2,6 +2,8 @@
 
 from pprint import pprint
 
+import pytest
+
 from quasar.parser import MuleParser
 from quasar.token_defs import all_ops
 
@@ -11,6 +13,51 @@ def parse_expr(code):
     p = MuleParser(f"result = {code}", all_ops, filename='test.py')
     result = p.parse()
     return result.body.forms[0].right
+
+
+def normalize_ast(node):
+    """
+    Normalize an AST node by removing parentheses effects and converting to comparable form.
+    This allows comparing trees that are semantically equivalent but have different parenthesization.
+    """
+    if not hasattr(node, 'to_dict'):
+        return node
+    
+    node_dict = node.to_dict()
+    
+    # For tuples with single elements (often created by parentheses), unwrap them
+    if node_dict.get('kind') == 'tuple' and len(node_dict.get('values', [])) == 1:
+        return normalize_ast(node.values[0])
+    
+    # Recursively normalize nested structures
+    if 'left' in node_dict and hasattr(node_dict['left'], 'to_dict'):
+        node_dict['left'] = normalize_ast(getattr(node, 'left'))
+    if 'right' in node_dict and hasattr(node_dict['right'], 'to_dict'):
+        node_dict['right'] = normalize_ast(getattr(node, 'right'))
+    if 'values' in node_dict:
+        node_dict['values'] = [normalize_ast(val) for val in getattr(node, 'values', [])]
+    if 'args' in node_dict:
+        node_dict['args'] = [normalize_ast(arg) for arg in getattr(node, 'args', [])]
+    
+    return node_dict
+
+
+def assert_same_precedence(code1, code2):
+    """
+    Assert that two expressions have the same precedence structure.
+    This ignores parentheses and focuses on the actual operator precedence.
+    
+    Example:
+        assert_same_precedence('1 + (2 * 3)', '1 + 2 * 3')  # passes
+        assert_same_precedence('(1 + 2) * 3', '1 + 2 * 3')  # fails with detailed message
+    """
+    ast1 = parse_expr(code1)
+    ast2 = parse_expr(code2)
+    
+    norm1 = normalize_ast(ast1)
+    norm2 = normalize_ast(ast2)
+    
+    assert norm1 == norm2, f"Precedence differs:\n  {code1} -> {norm1}\n  {code2} -> {norm2}"
 
 
 def test_basic_arithmetic_precedence():
@@ -227,6 +274,32 @@ def run_precedence_demonstration():
         except Exception as e:
             print(f"{code:15} -> ERROR: {e}")
             print()
+
+
+@pytest.mark.parametrize("code1,code2", [
+    # Basic arithmetic precedence - these should be equivalent
+    ('1 + 2 * 3', '1 + (2 * 3)'),
+    ('2 ** 3 * 4', '(2 ** 3) * 4'),
+    ('a + b - c', '(a + b) - c'),  # Left associative
+    ('x * y / z', '(x * y) / z'),  # Left associative
+    
+    # Complex arithmetic with redundant parentheses
+    ('a + b * c + d', 'a + (b * c) + d'),
+    ('a + b * c + d', '(a + (b * c)) + d'),
+    
+    # Exponentiation precedence
+    ('2 * 3 ** 4 + 5', '2 * (3 ** 4) + 5'),
+    ('2 * 3 ** 4 + 5', '(2 * (3 ** 4)) + 5'),
+    
+    # Comparison precedence
+    ('1 + 2 == 3', '(1 + 2) == 3'),
+    ('x < y + 1', 'x < (y + 1)'),
+])
+def test_precedence_equivalence(code1, code2):
+    """Test that expressions with redundant parentheses are equivalent."""
+    assert_same_precedence(code1, code2)
+
+
 
 
 if __name__ == "__main__":
