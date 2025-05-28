@@ -423,9 +423,10 @@ class Cond(FSTNode):
             if i == 0:
                 result.append(f'if {clause.py()}')
             else:
-                # Check if this is an 'else' clause (condition is always true)
-                if hasattr(clause.condition, 'literal') and clause.condition.literal == 't':
-                    result.append(f'else{clause.py()[clause.condition.py():]}')
+                # Check if this is an 'else' clause (condition is LispLiteral 't')
+                if (hasattr(clause.condition, 'literal') and clause.condition.literal == 't'):
+                    # For else clause, just use the body part
+                    result.append(f'else:\n{clause.body.py()}')
                 else:
                     result.append(f'elif {clause.py()}')
 
