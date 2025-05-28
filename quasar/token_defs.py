@@ -14,8 +14,8 @@ def find_self_assignments(n):
         for clause in n.clauses:
             assignments.extend(find_self_assignments(clause))
     elif n.kind == 'getattr':
-        if n.left.name == 'self':
-            assignments.append(n.name.name)
+        if hasattr(n.left, 'name') and n.left.name == 'self':
+            assignments.append(n.name)
 
     return assignments
 
@@ -70,15 +70,23 @@ class FSTNode:
     def clmap(self, forms):
         return ['%s' % x for x in forms]
 
+    def _convert_to_dict(self, value):
+        """Recursively convert nested structures to dictionaries."""
+        if hasattr(value, 'to_dict'):
+            return value.to_dict()
+        elif isinstance(value, list):
+            return [self._convert_to_dict(item) for item in value]
+        elif isinstance(value, tuple):
+            return tuple(self._convert_to_dict(item) for item in value)
+        else:
+            return value
+
     def to_dict(self):
         d = {}
         d['kind'] = self.kind
 
         for key, value in self.__dict__.items():
-            if hasattr(value, 'to_dict'):
-                d[key] = value.to_dict()
-            else:
-                d[key] = value
+            d[key] = self._convert_to_dict(value)
         return d
 
 

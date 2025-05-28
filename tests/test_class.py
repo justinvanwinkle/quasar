@@ -46,7 +46,15 @@ def test_class_with_method():
                           'bases': [],
                           'slots': [],
                           'members': [],
-                          'methods': [],
+                          'methods': [{'kind': 'defun',
+                                      'name': {'kind': 'symbol', 'name': 'foo'},
+                                      'arg_names': [{'kind': 'symbol', 'name': 'self'}],
+                                      'kw_args': [],
+                                      'body': {'kind': 'body',
+                                              'forms': [{'kind': 'call',
+                                                        'left': {'kind': 'symbol', 'name': 'print'},
+                                                        'args': [{'kind': 'string', 'value': 'bar'}],
+                                                        'kw_args': []}]}}],
                           'constructor': None}]}
 
     assert root.to_dict()['body'] == expected_body
