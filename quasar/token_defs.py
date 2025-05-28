@@ -1174,8 +1174,6 @@ class Name(Token):
             return BinaryOperator('eq', left, parser.expression())
         elif self.value == 'for':
             in_node = parser.expression()
-            breakpoint()
-
             return ForExpression(left, in_node)
         elif self.value == 'and':
             return BinaryOperator('AND', left, parser.expression())
