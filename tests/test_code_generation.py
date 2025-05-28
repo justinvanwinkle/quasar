@@ -285,9 +285,9 @@ name :: str"""
     
     generated_code = original_ast.py()
     
-    # Check exact string output for simple case
+    # Check exact string output
     expected = """x: int = 5
-    name: str
+name: str
 """
     assert generated_code == expected
     

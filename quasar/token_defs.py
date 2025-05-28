@@ -276,10 +276,14 @@ class CLOSClass(FSTNode):
 
         body_parts = []
         if self.constructor:
-            body_parts.append(self.constructor.py())
+            # Indent each line of the constructor
+            constructor_lines = self.constructor.py().splitlines()
+            body_parts.extend('    ' + line for line in constructor_lines)
 
         for method in self.methods:
-            body_parts.append(method.py())
+            # Indent each line of the method
+            method_lines = method.py().splitlines()
+            body_parts.extend('    ' + line for line in method_lines)
 
         if not body_parts:
             body_parts.append('    pass')
@@ -917,6 +921,11 @@ class Colon(Token):
         if self.value == '::':
             self.lbp = Precedence.TYPE_ANNOTATION
             self.name = '::'
+        elif self.value == ':':
+            # Single colon for type annotations - must be lower than STATEMENT_LEVEL
+            # so that statement parsing doesn't consume it
+            self.lbp = Precedence.STATEMENT_LEVEL - 1
+            self.name = ':'
         else:
             self.lbp = 0
         return True
@@ -925,8 +934,10 @@ class Colon(Token):
         return LispLiteral(value[1:])
 
     def led(self, parser, left):
-        right = parser.expression(Precedence.TYPE_ANNOTATION)
-        return Type(right, left)
+        if self.value in (':', '::'):
+            right = parser.expression(Precedence.TYPE_ANNOTATION)
+            return Type(right, left)
+        raise SyntaxError(f'Unexpected colon token: {self.value}')
 
 
 @register
@@ -1280,9 +1291,9 @@ class Name(Token):
 
     def led(self, parser, left):
         if self.value == 'in':
-            return In(left, parser.expression())
+            return In(left, parser.expression(Precedence.IN_IS))
         elif self.value == 'is':
-            return BinaryOperator('eq', left, parser.expression())
+            return BinaryOperator('eq', left, parser.expression(Precedence.IN_IS))
         elif self.value == 'for':
             in_node = parser.expression()
             return ForExpression(left, in_node)
