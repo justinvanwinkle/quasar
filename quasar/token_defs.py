@@ -107,8 +107,6 @@ class FSTNode:
     def __repr__(self):
         return '<<' + repr(self.to_dict()) + '>>'
 
-    def clmap(self, forms):
-        return ['%s' % x for x in forms]
 
     def _convert_to_dict(self, value):
         """Recursively convert nested structures to dictionaries."""
@@ -267,75 +265,38 @@ class CLOSClass(FSTNode):
             else:
                 self.methods.append(form)
 
-    def cl_method(self, defun):
-        return Method(defun, self.name)
 
-    def cl_methods(self):
-        return ' '.join(self.cl_method(defun).cl() for defun in self.methods)
+    def py(self):
+        bases_str = ''
+        if self.bases:
+            bases_py = ', '.join(base.py() for base in self.bases)
+            bases_str = f'({bases_py})'
 
-    def cl_bases(self):
-        return '(%s)' % ' '.join(base.cl() for base in self.bases)
+        class_header = f'class {self.name.py()}{bases_str}:'
 
-    def cl_slot(self, slot):
-        return '|%s|' % slot
-
-    def cl_slots(self):
-        if self.slots:
-            return '(%s)' % ' '.join(self.cl_slot(slot) for slot in self.slots)
-        else:
-            return 'NIL'
-
-    def cl_init_call(self):
-        if not self.constructor:
-            return ''
-        return '(|init| |self| %s)' % self.cl_init_args()
-
-    def cl_init_args(self):
-        if self.constructor is None:
-            return ''
-        return self.constructor.cl_args(skip_first=True)
-
-    def cl_constructor(self):
+        body_parts = []
         if self.constructor:
-            body_forms = self.constructor.body.forms
-            arg_names = self.constructor.arg_names[1:]
-            kw_args = self.constructor.kw_args
-        else:
-            body_forms = []
-            arg_names = []
-            kw_args = []
-        forms = list(body_forms) + [Symbol('self')]
-        body = Let(
-            Symbol('self'),
-            LispLiteral("(CL:MAKE-INSTANCE '%s)" % self.name),
-            PythonBody(forms))
+            body_parts.append(self.constructor.py())
 
-        defun = Def(self.name, arg_names, kw_args, PythonBody([body]))
+        for method in self.methods:
+            body_parts.append(method.py())
 
-        return "%s" % defun
+        if not body_parts:
+            body_parts.append('    pass')
 
-    def cl(self):
-        defclass = 'CLASS <%s %s %s>' % (
-            self.name.cl(),
-            self.cl_bases(),
-            self.cl_slots())
-        if self.methods:
-            defclass += ' '
-            defclass += self.cl_methods()
-        defclass += ' '
-        defclass += self.cl_constructor()
-
-        return defclass
+        body = '\n'.join(body_parts)
+        return f'{class_header}\n{body}'
 
 
 class Condition(CLOSClass):
-    def cl(self):
-        defclass = '(CL:DEFINE-CONDITION %s %s %s)' % (
-            self.name.cl(),
-            self.cl_bases(),
-            self.cl_slots())
+    def py(self):
+        # Conditions are special exception classes in Python
+        bases_str = '(Exception)'
+        if self.bases:
+            bases_py = ', '.join(base.py() for base in self.bases)
+            bases_str = f'({bases_py})'
 
-        return defclass
+        return f'class {self.name.py()}{bases_str}:\n    pass'
 
 
 class Def(FSTNode):
@@ -350,15 +311,15 @@ class Def(FSTNode):
     def py(self):
         args_py = fmt_args(self.arg_names)
         kwargs_py = fmt_kwargs(self.kw_args)
-        
+
         params = []
         if args_py:
             params.append(args_py)
         if kwargs_py:
             params.append(kwargs_py)
-        
+
         params_str = ', '.join(params)
-        
+
         return f'def {self.name.py()}({params_str}):\n{self.body.py()}'
 
 
@@ -370,11 +331,20 @@ class Import(FSTNode):
         self.symbols = symbols
         self.alias = alias
 
-    def cl(self):
-        return (f'Import<'
-                f'from={self.module}, '
-                f'symbols={self.symbols}, '
-                f'as={self.alias}>')
+    def py(self):
+        if self.symbols:
+            if len(self.symbols) == 1 and self.symbols[0].name == '*':
+                import_str = f'from {self.module.py()} import *'
+            else:
+                symbols_py = ', '.join(sym.py() for sym in self.symbols)
+                import_str = f'from {self.module.py()} import {symbols_py}'
+        else:
+            import_str = f'import {self.module.py()}'
+
+        if self.alias:
+            import_str += f' as {self.alias.py()}'
+
+        return import_str
 
 
 class Export(FSTNode):
@@ -383,8 +353,10 @@ class Export(FSTNode):
     def __init__(self, values):
         self.values = values
 
-    def cl(self):
-        return "(CL:EXPORT '(%s))" % ' '.join(self.clmap(self.values))
+    def py(self):
+        # Python doesn't have explicit exports, so we'll use __all__
+        values_py = ', '.join(repr(val.py()) for val in self.values)
+        return f'__all__ = [{values_py}]'
 
 
 class ForLoop(FSTNode):
@@ -394,8 +366,8 @@ class ForLoop(FSTNode):
         self.in_node = in_node
         self.body = body
 
-    def cl(self):
-        return f'FOR {self.in_node}\n{self.body}'
+    def py(self):
+        return f'for {self.in_node.py()}:\n{self.body.py()}'
 
 
 class ConditionalExpression(FSTNode):
@@ -406,8 +378,8 @@ class ConditionalExpression(FSTNode):
         self.condition = condition
         self.false_expr = false_expr
 
-    def cl(self):
-        return f'{self.true_expr} if {self.condition} else {self.false_expr}'
+    def py(self):
+        return f'{self.true_expr.py()} if {self.condition.py()} else {self.false_expr.py()}'
 
 
 class ForExpression(FSTNode):
@@ -418,9 +390,11 @@ class ForExpression(FSTNode):
         self.in_node = in_node
         self.condition = condition
 
-    def cl(self):
-        return (f'ForExpression<{self.view} '
-                f'FOR {self.in_node} IF {self.condition}>')
+    def py(self):
+        comprehension = f'{self.view.py()} for {self.in_node.py()}'
+        if self.condition:
+            comprehension += f' if {self.condition.py()}'
+        return f'[{comprehension}]'
 
 
 class CondClause(FSTNode):
@@ -430,8 +404,8 @@ class CondClause(FSTNode):
         self.condition = condition
         self.body = body
 
-    def cl(self):
-        return '%s:\n %s' % (self.condition, self.body)
+    def py(self):
+        return f'{self.condition.py()}:\n{self.body.py()}'
 
 
 class Cond(FSTNode):
@@ -440,8 +414,22 @@ class Cond(FSTNode):
     def __init__(self, clauses):
         self.clauses = clauses
 
-    def cl(self):
-        return 'if %s' % ' '.join('%s' % c for c in self.clauses)
+    def py(self):
+        if not self.clauses:
+            return ''
+
+        result = []
+        for i, clause in enumerate(self.clauses):
+            if i == 0:
+                result.append(f'if {clause.py()}')
+            else:
+                # Check if this is an 'else' clause (condition is always true)
+                if hasattr(clause.condition, 'literal') and clause.condition.literal == 't':
+                    result.append(f'else{clause.py()[clause.condition.py():]}')
+                else:
+                    result.append(f'elif {clause.py()}')
+
+        return '\n'.join(result)
 
 
 class UnwindProtect(FSTNode):
@@ -449,9 +437,8 @@ class UnwindProtect(FSTNode):
         self.body_form = body_form
         self.cleanup_form = cleanup_form
 
-    def cl(self):
-        return '(CL:UNWIND-PROTECT %s %s)' % (
-            self.body_form, self.cleanup_form)
+    def py(self):
+        return f'try:\n{self.body_form.py()}\nfinally:\n{self.cleanup_form.py()}'
 
 
 class Try(FSTNode):
@@ -461,10 +448,11 @@ class Try(FSTNode):
         self.try_body = try_body
         self.excepts = excepts
 
-    def cl(self):
-        return 'Try:\n%s \n%s' % (
-            self.try_body.cl(),
-            '\n'.join(self.clmap(self.excepts)))
+    def py(self):
+        result = f'try:\n{self.try_body.py()}'
+        for except_clause in self.excepts:
+            result += f'\n{except_clause.py()}'
+        return result
 
 
 class Except(FSTNode):
@@ -473,9 +461,14 @@ class Except(FSTNode):
         self.body = body
         self.exception_name = exception_name
 
-    def cl(self):
-        return (f'Except<{self.exception_class}>'
-                f'[AS={self.exception_name}]\n{self.body}')
+    def py(self):
+        except_line = 'except'
+        if self.exception_class:
+            except_line += f' {self.exception_class.py()}'
+            if self.exception_name:
+                except_line += f' as {self.exception_name.py()}'
+        except_line += ':'
+        return f'{except_line}\n{self.body.py()}'
 
 
 class Return(FSTNode):
@@ -515,8 +508,8 @@ class WhileLoop(FSTNode):
         self.test = test
         self.body = body
 
-    def cl(self):
-        return f'While<{self.test.cl()}>\n' + self.body.cl()
+    def py(self):
+        return f'while {self.test.py()}:\n{self.body.py()}'
 
 
 class In(FSTNode):
@@ -526,15 +519,15 @@ class In(FSTNode):
         self.thing = thing
         self.collection = collection
 
-    def cl(self):
-        return '%s in %s' % (self.thing, self.collection)
+    def py(self):
+        return f'{self.thing.py()} in {self.collection.py()}'
 
 
 class Find(In):
     kind = 'find'
 
-    def cl(self):
-        return '(find %s %s)' % (self.thing, self.collection)
+    def py(self):
+        return f'{self.thing.py()} in {self.collection.py()}'
 
 
 class Nil(FSTNode):
@@ -550,8 +543,8 @@ class UsePackage(FSTNode):
     def __init__(self, right):
         self.right = right
 
-    def cl(self):
-        return '(CL:USE-PACKAGE "%s")' % self.right.name
+    def py(self):
+        return f'# USE-PACKAGE {self.right.name}'
 
 
 class List(FSTNode):
@@ -647,8 +640,8 @@ class NotEquality(FSTNode):
         self.left = left
         self.right = right
 
-    def cl(self):
-        return '(CL:NOT (|__eq__| %s %s))' % (self.left.cl(), self.right.cl())
+    def py(self):
+        return f'{self.left.py()} != {self.right.py()}'
 
 
 class MultipleValueBind(FSTNode):
@@ -659,11 +652,9 @@ class MultipleValueBind(FSTNode):
         self.right = right
         self.body = body
 
-    def cl(self):
-        return '(CL:MULTIPLE-VALUE-BIND (%s) %s %s)' % (
-            ' '. join(self.clmap(self.left.values)),
-            self.right,
-            self.body.cl())
+    def py(self):
+        vars_py = ', '.join(val.py() for val in self.left.values)
+        return f'{vars_py} = {self.right.py()}\n{self.body.py()}'
 
 
 class Setf(FSTNode):
@@ -684,11 +675,11 @@ class Let(FSTNode):
         self.pairs = [(left, right)]
         self.body = body
 
-    def cl(self):
+    def py(self):
         rep = ''
         for left, right in self.pairs:
-            rep += f'ASSIGN {left} = {right}\n'
-        rep += self.body.cl()
+            rep += f'{left.py()} = {right.py()}\n'
+        rep += self.body.py()
         return rep
 
 
@@ -699,8 +690,8 @@ class SetItem(FSTNode):
         self.left = left
         self.right = right
 
-    def cl(self):
-        return f'SET_ITEM {self.left} = {self.right}'
+    def py(self):
+        return f'{self.left.py()} = {self.right.py()}'
 
 
 class Number(FSTNode):

@@ -97,7 +97,7 @@ def test_nested_type_context():
     defun = root.body.forms[0]
     assert defun.kind == 'defun'
     assert defun.name.name == 'process'
-    
+
     # Check that the type annotation is in the function body
     assignment = defun.body.forms[0]
     assert assignment.kind == 'setf'
@@ -150,19 +150,19 @@ def test_type_annotation_precedence():
 
     assignment = root.body.forms[0]
     assert assignment.kind == 'multiple_value_bind'
-    
+
     # Left side should be a tuple of type annotations
     left_tuple = assignment.left
     assert left_tuple.kind == 'tuple'
     assert len(left_tuple.values) == 2
-    
+
     # First type annotation
     type1 = left_tuple.values[0]
     assert type1.kind == 'type'
     assert type1.left.name == 'x'
     assert type1.type.name == 'int'
-    
-    # Second type annotation  
+
+    # Second type annotation
     type2 = left_tuple.values[1]
     assert type2.kind == 'type'
     assert type2.left.name == 'y'
