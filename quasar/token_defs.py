@@ -1303,7 +1303,7 @@ class LBracket(Token):
         # Parse the index/slice expression
         while parser.token_handler.name != ']':
             # Parse component if there is one
-            if parser.token_handler.name != ':':
+            if parser.token_handler.name not in (':', '::'):
                 component = parser.expression(Precedence.FUNCTION_ARG)
                 components.append(component)
             else:
@@ -1313,6 +1313,11 @@ class LBracket(Token):
             if parser.maybe_match(':'):
                 is_slice = True
                 # After colon, continue to parse next component
+            elif parser.maybe_match('::'):
+                # :: is equivalent to two colons, so add an extra None component
+                is_slice = True
+                components.append(None)
+                # Continue to parse step component
             else:
                 # No colon, we're done
                 break
