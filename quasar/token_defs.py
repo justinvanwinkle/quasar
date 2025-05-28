@@ -11,8 +11,8 @@ class Precedence(IntEnum):
     """
     # Parsing contexts (what level of expression to accept)
     FULL_EXPRESSION = 0      # Parse any expression, including tuple comma
-    RETURN_YIELD = 5         # For return/yield values (above assignment)
-    STATEMENT_LEVEL = 10     # For statement contexts (conditions, assignments)
+    STATEMENT_LEVEL = 5      # For statement contexts (conditions, assignments) - lowest precedence
+    RETURN_YIELD = 10        # For return/yield values (above assignment)
     COMMA = 15              # , (tuple creation)
     COMPREHENSION = 20      # for in comprehensions
     LAMBDA = 25             # lambda
@@ -1517,21 +1517,24 @@ class Comma(Token):
     lbp = Precedence.COMMA
 
     def led(self, parser, left):
+        # This handles: left, ...
+        # Could be: x, y, z  or  x,  (trailing comma)
         values = [left]
-        # Try to parse the next expression, but handle the case where
-        # there's nothing valid to parse (like trailing comma before assignment)
-        try:
-            values.append(parser.expression(Precedence.COMMA))
-        except (NotImplementedError, SyntaxError):
-            # This handles trailing comma case - no second expression to parse
-            pass
 
+        # Check if this is a trailing comma case (followed by assignment)
+        if parser.token_handler.name == '=':
+            # Trailing comma case: "x, = ..."
+            return Tuple(values)
+
+        # Parse next expression for regular comma
+        values.append(parser.expression(Precedence.COMMA))
+
+        # Continue parsing comma-separated values
         while parser.maybe_match(','):
-            try:
-                values.append(parser.expression(Precedence.COMMA))
-            except (NotImplementedError, SyntaxError):
-                # Handle trailing comma in multi-element case
+            # Check for trailing comma after each comma
+            if parser.token_handler.name == '=':
                 break
+            values.append(parser.expression(Precedence.COMMA))
 
         return Tuple(values)
 

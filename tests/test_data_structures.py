@@ -197,3 +197,43 @@ def test_multiple_assignment():
     else:
         # Multiple value bind
         assert assignment.kind == 'multiple_value_bind'
+
+
+def test_simple_tuple_assignment():
+    code = "x, y = [1, 2]"
+    p = MuleParser(code, all_ops, filename='test.py')
+    root = p.parse()
+
+    assignment = root.body.forms[0]
+    assert assignment.kind == 'multiple_value_bind'
+    assert assignment.left.kind == 'tuple'
+    assert len(assignment.left.values) == 2
+    assert assignment.left.values[0].name == 'x'
+    assert assignment.left.values[1].name == 'y'
+    assert assignment.right.kind == 'list'
+
+
+def test_single_element_tuple_assignment():
+    code = "x, = [1]"
+    p = MuleParser(code, all_ops, filename='test.py')
+    root = p.parse()
+
+    assignment = root.body.forms[0]
+    assert assignment.kind == 'multiple_value_bind'
+    assert assignment.left.kind == 'tuple'
+    assert len(assignment.left.values) == 1
+    assert assignment.left.values[0].name == 'x'
+    assert assignment.right.kind == 'list'
+
+
+def test_trailing_comma_tuple():
+    code = "x = 1,"
+    p = MuleParser(code, all_ops, filename='test.py')
+    root = p.parse()
+
+    assignment = root.body.forms[0]
+    assert assignment.kind == 'setf'
+    assert assignment.left.name == 'x'
+    assert assignment.right.kind == 'tuple'
+    assert len(assignment.right.values) == 1
+    assert assignment.right.values[0].value == '1'
