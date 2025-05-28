@@ -41,6 +41,26 @@ class Precedence(IntEnum):
 all_ops = []
 
 
+def syntax_error_with_location(message, parser=None, token=None):
+    """Create a SyntaxError with line and column information."""
+    if token is None and parser is not None:
+        token = getattr(parser, 'token_handler', None)
+    
+    if token is not None:
+        line = getattr(token, 'line', 'unknown')
+        column = getattr(token, 'column', 'unknown')
+    else:
+        line = 'unknown'
+        column = 'unknown'
+    
+    if parser is not None:
+        filename = getattr(parser, 'filename', 'unknown')
+    else:
+        filename = 'unknown'
+    
+    return SyntaxError(f'{message} at {filename}:{line}:{column}')
+
+
 def find_self_assignments(n):
     assignments = []
     if n.kind == 'body':
@@ -841,7 +861,7 @@ class NoDispatchTokens(EnumeratedToken):
         '}': 0}
 
     def nud(self, parser, value):
-        raise SyntaxError(f'Unexpected token {value} in expression context')
+        raise syntax_error_with_location(f'Unexpected token {value} in expression context', parser)
 
 
 @register
@@ -937,7 +957,7 @@ class Colon(Token):
         if self.value in (':', '::'):
             right = parser.expression(Precedence.TYPE_ANNOTATION)
             return Type(right, left)
-        raise SyntaxError(f'Unexpected colon token: {self.value}')
+        raise syntax_error_with_location(f'Unexpected colon token: {self.value}', parser)
 
 
 @register
@@ -1008,7 +1028,7 @@ class Endblock(Token):
     name = 'ENDBLOCK'
 
     def nud(self, parser, value):
-        raise SyntaxError('Unexpected end of block in expression context')
+        raise syntax_error_with_location('Unexpected end of block in expression context', parser)
 
 
 @register

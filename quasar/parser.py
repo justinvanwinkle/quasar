@@ -141,18 +141,23 @@ class MuleParser(PrattParser):
 
         def maybe_change_indent(current_indent,
                                 new_indent,
-                                after_colon):
+                                after_colon,
+                                current_token):
             if new_indent > current_indent + 1:
                 if not after_colon:
                     return current_indent
                 else:
                     raise Exception('Indented too much %s' % index)
             elif new_indent == current_indent + 1 and after_colon:
-                new_tokens.append(Block())
+                line = getattr(current_token, 'line', 0)
+                column = getattr(current_token, 'column', 0)
+                new_tokens.append(Block(line=line, column=column))
                 return new_indent
             elif new_indent < current_indent:
                 for _ in range(current_indent - new_indent):
-                    new_tokens.append(Endblock())
+                    line = getattr(current_token, 'line', 0)
+                    column = getattr(current_token, 'column', 0)
+                    new_tokens.append(Endblock(line=line, column=column))
                 return new_indent
             return current_indent
 
@@ -176,7 +181,8 @@ class MuleParser(PrattParser):
 
             current_indent = maybe_change_indent(current_indent,
                                                  new_indent,
-                                                 after_colon)
+                                                 after_colon,
+                                                 token)
 
             if token.name == ':':
                 after_colon = True

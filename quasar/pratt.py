@@ -96,8 +96,10 @@ class PrattParser:
 
     def match(self, token_name=None):
         if token_name != self.token_handler.name:
-            raise SyntaxError('Expected %s, Got %s' % (
-                token_name, self.token_handler.name))
+            line = getattr(self.token_handler, 'line', 'unknown')
+            column = getattr(self.token_handler, 'column', 'unknown')
+            filename = getattr(self, 'filename', 'unknown')
+            raise SyntaxError(f'Expected {token_name}, Got {self.token_handler.name} at {filename}:{line}:{column}')
         self.log('MATCHED: %s', token_name)
         token = self.token_handler
         self.feed()
