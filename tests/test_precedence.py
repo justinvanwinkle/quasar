@@ -376,7 +376,7 @@ def run_precedence_demonstration():
     ('func(a + b) * obj.attr ** 2', '(func((a + b))) * ((obj.attr) ** 2)'),
     ('not a and b or c and d', '((not a) and b) or (c and d)'),
 
-    # Set/dict operations  
+    # Set/dict operations
     ('{a, b} | {c}', '({a, b}) | ({c})'),
     ('{a} & {b} | {c}', '({a} & {b}) | {c}'),
 

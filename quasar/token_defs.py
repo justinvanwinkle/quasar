@@ -1,3 +1,43 @@
+from enum import IntEnum
+
+
+class Precedence(IntEnum):
+    """
+    Python operator precedence levels for the Pratt parser.
+    Higher values = higher precedence (bind more tightly).
+
+    Based on Python's official operator precedence:
+    https://docs.python.org/3/reference/expressions.html#operator-precedence
+    """
+    # Parsing contexts (what level of expression to accept)
+    FULL_EXPRESSION = 0      # Parse any expression, including tuple comma
+    RETURN_YIELD = 5         # For return/yield values (above assignment)
+    STATEMENT_LEVEL = 10     # For statement contexts (conditions, assignments)
+    COMMA = 15              # , (tuple creation)
+    COMPREHENSION = 20      # for in comprehensions
+    LAMBDA = 25             # lambda
+    CONDITIONAL = 30        # if-else (ternary)
+    FUNCTION_ARG = 30       # Function argument parsing
+    OR = 35                 # or
+    AND = 40                # and
+    NOT = 50                # not
+    IN_IS = 60              # in, not in, is, is not, comparisons
+    BITWISE_OR = 70         # |
+    NAME_CONTEXT = 80       # Traditional level for parsing names in context
+    BITWISE_AND = 90        # &
+    SHIFTS = 100            # << >>
+    ADDITION = 110          # + -
+    MULTIPLICATION = 120    # * / // %
+    UNARY = 130             # +x -x ~x
+    EXPONENTIATION = 140    # **
+    ATTRIBUTE_CALL_INDEX = 150  # . () []
+    NAME_LITERAL = 160      # Names, literals (for parsing names without consuming calls)
+    TYPE_ANNOTATION = 200   # :: (type annotations)
+
+    # Aliases for clarity
+    ASSIGNMENT = STATEMENT_LEVEL  # = += -= etc.
+    BITWISE_XOR = NAME_CONTEXT    # ^ (also used for name parsing)
+
 all_ops = []
 
 
@@ -381,6 +421,8 @@ class UnwindProtect(FSTNode):
 
 
 class Try(FSTNode):
+    kind = 'try'
+
     def __init__(self, try_body, excepts):
         self.try_body = try_body
         self.excepts = excepts
@@ -770,21 +812,21 @@ class NoDispatchTokens(EnumeratedToken):
 @register
 class BinOpToken(EnumeratedToken):
     lbp_map = {
-        '%': 120,   # Modulo - same as *, /
-        '&': 90,    # Bitwise AND
-        '*': 120,   # Multiplication
-        '**': 140,  # Exponentiation (highest binary op)
-        '+': 110,   # Addition
-        '-': 110,   # Subtraction
-        '/': 120,   # Division
-        '//': 120,  # Floor division
-        '<': 60,    # Less than
-        '<<': 100,  # Left shift
-        '>': 60,    # Greater than
-        '>=': 60,   # Greater equal
-        '>>': 100,  # Right shift
-        '^': 80,    # Bitwise XOR
-        '|': 70}    # Bitwise OR
+        '%': Precedence.MULTIPLICATION,
+        '&': Precedence.BITWISE_AND,
+        '*': Precedence.MULTIPLICATION,
+        '**': Precedence.EXPONENTIATION,
+        '+': Precedence.ADDITION,
+        '-': Precedence.ADDITION,
+        '/': Precedence.MULTIPLICATION,
+        '//': Precedence.MULTIPLICATION,
+        '<': Precedence.IN_IS,
+        '<<': Precedence.SHIFTS,
+        '>': Precedence.IN_IS,
+        '>=': Precedence.IN_IS,
+        '>>': Precedence.SHIFTS,
+        '^': Precedence.BITWISE_XOR,
+        '|': Precedence.BITWISE_OR}
 
     op_map = {
         '^': 'LOGXOR',
@@ -835,7 +877,7 @@ class Colon(Token):
 
     def complete(self):
         if self.value == '::':
-            self.lbp = 200
+            self.lbp = Precedence.TYPE_ANNOTATION
             self.name = '::'
         else:
             self.lbp = 0
@@ -845,20 +887,20 @@ class Colon(Token):
         return LispLiteral(value[1:])
 
     def led(self, parser, left):
-        right = parser.expression(200)
+        right = parser.expression(Precedence.TYPE_ANNOTATION)
         return Type(right, left)
 
 
 @register
 class AssignOrEquals(EnumeratedToken):
     lbp_map = {
-        '==': 60,  # Equality comparison
-        '=': 10}   # Assignment (lowest precedence)
+        '==': Precedence.IN_IS,
+        '=': Precedence.ASSIGNMENT}
 
     def led(self, parser, left):
         if self.value == '=':
             if left.kind == 'tuple':
-                right = parser.expression(10)
+                right = parser.expression(Precedence.STATEMENT_LEVEL)  # Assignment context
                 parser.maybe_match('NEWLINE')
                 parser.ns.push_new()
                 for val in left.values:
@@ -870,7 +912,7 @@ class AssignOrEquals(EnumeratedToken):
                 parser.ns.pop()
                 return mvb_node
             else:
-                right = parser.expression(10)
+                right = parser.expression(Precedence.STATEMENT_LEVEL)  # Assignment context
                 parser.maybe_match('NEWLINE')
                 parser.ns.push_new()
                 parser.ns.add(left)
@@ -882,7 +924,7 @@ class AssignOrEquals(EnumeratedToken):
 
 @register
 class NotEqual(EnumeratedToken):
-    lbp_map = {'!=': 60}  # Same as other comparisons
+    lbp_map = {'!=': Precedence.IN_IS}
 
     def led(self, parser, left):
         return NotEquality(left, parser.expression())
@@ -930,13 +972,13 @@ class Name(Token):
         value = self.value
         if value == 'in':
             self.name = 'IN'
-            self.lbp = 60   # Same as other comparisons
+            self.lbp = Precedence.IN_IS
         elif value == 'is':
             self.name = 'IS'
-            self.lbp = 60   # Same as other comparisons
+            self.lbp = Precedence.IN_IS
         elif value == 'for':
             self.name = 'for'
-            self.lbp = 20   # For comprehensions
+            self.lbp = Precedence.COMPREHENSION
         elif value == 'elif':
             self.name = 'ELIF'
         elif value == 'else':
@@ -951,10 +993,10 @@ class Name(Token):
             self.name = 'AS'
         elif value == 'and':
             self.name = 'AND'
-            self.lbp = 40   # Boolean AND
+            self.lbp = Precedence.AND
         elif value == 'not':
             self.name = 'NOT'
-            self.lbp = 50   # Boolean NOT (unary)
+            self.lbp = Precedence.NOT
 
         return True
 
@@ -962,14 +1004,14 @@ class Name(Token):
         if value == 'raise':
             if parser.maybe_match('NEWLINE'):
                 return Raise()
-            exception_class = parser.expression(80)
+            exception_class = parser.expression(Precedence.NAME_CONTEXT)
             if parser.maybe_match('('):
                 while parser.watch(')'):
                     args = []
                     kw_args = []
-                    arg_name = parser.expression(40)
+                    arg_name = parser.expression(Precedence.AND)
                     if parser.maybe_match('='):
-                        kw_args.append((arg_name, parser.expression(40)))
+                        kw_args.append((arg_name, parser.expression(Precedence.AND)))
                     else:
                         args.append(arg_name)
                         parser.maybe_match('NEWLINE')
@@ -989,9 +1031,9 @@ class Name(Token):
                 exc_name = None
                 parser.ns.push_new()
                 if not parser.maybe_match(':'):
-                    exc_class = parser.expression(80)
+                    exc_class = parser.expression(Precedence.NAME_CONTEXT)
                     if parser.maybe_match('AS'):
-                        exc_name = parser.expression(80)
+                        exc_name = parser.expression(Precedence.NAME_CONTEXT)
                     parser.match(':')
                 body = parser.expression()
                 excepts.append(Except(body, exc_class, exc_name))
@@ -1009,10 +1051,10 @@ class Name(Token):
                 body = UnwindProtect(body, finally_body)
             return body
         elif value == 'import':
-            module = parser.expression(80)
+            module = parser.expression(Precedence.NAME_CONTEXT)
             alias = None
             if parser.maybe_match('AS'):
-                alias = parser.expression(0)
+                alias = parser.expression(Precedence.FULL_EXPRESSION)
 
             return Import(module, alias=alias)
 
@@ -1022,7 +1064,7 @@ class Name(Token):
             while parser.maybe_match('DOT'):
                 relative += 1
 
-            module = parser.expression(80)
+            module = parser.expression(Precedence.NAME_CONTEXT)
 
             import_ = parser.match('NAME')
             assert import_.value == 'import'
@@ -1034,7 +1076,7 @@ class Name(Token):
 
             alias = None
             if parser.maybe_match('AS'):
-                alias = parser.expression(0)
+                alias = parser.expression(Precedence.FULL_EXPRESSION)
 
             parser.maybe_match('NEWLINE')
             return Import(module, values, alias=alias)
@@ -1057,7 +1099,7 @@ class Name(Token):
         elif value == 'if':
             cond_clauses = []
             parser.ns.push_new()
-            condition = parser.expression(10)
+            condition = parser.expression(Precedence.STATEMENT_LEVEL)  # Parse full condition
             parser.match(':')
             parser.match('NEWLINE')
             body = parser.expression()
@@ -1065,7 +1107,7 @@ class Name(Token):
             cond_clauses.append(CondClause(condition, body))
             while parser.maybe_match('ELIF'):
                 parser.ns.push_new()
-                condition = parser.expression(10)
+                condition = parser.expression(Precedence.STATEMENT_LEVEL)  # Parse full condition
                 parser.match(':')
                 parser.match('NEWLINE')
                 body = parser.expression()
@@ -1086,7 +1128,7 @@ class Name(Token):
 
         elif value == 'while':
             # parser.ns.push_new()
-            test = parser.expression(10)
+            test = parser.expression(Precedence.STATEMENT_LEVEL)  # Parse full test condition
             parser.match(':')
             parser.match('NEWLINE')
             body = parser.expression()
@@ -1100,25 +1142,25 @@ class Name(Token):
             if parser.maybe_match('NEWLINE'):
                 return_expr = Nil()
             else:
-                return_expr = parser.expression(5)
+                return_expr = parser.expression(Precedence.RETURN_YIELD)
             return Return(return_expr)
 
         elif value == 'yield':
             if parser.maybe_match('NEWLINE'):
                 return_expr = Nil()
             else:
-                return_expr = parser.expression(5)
+                return_expr = parser.expression(Precedence.RETURN_YIELD)
             return Yield(return_expr)
 
         elif value in ('class', 'condition'):
-            name = parser.expression(80)
+            name = parser.expression(Precedence.NAME_CONTEXT)  # Parse class/condition name
             if value == 'class':
                 cc = CLOSClass(name)
             else:
                 cc = Condition(name)
             if parser.maybe_match('('):
                 while parser.watch(')'):
-                    cc.bases.append(parser.expression(40))
+                    cc.bases.append(parser.expression(Precedence.AND))
                     parser.maybe_match(',')
             parser.match(':')
             parser.match('NEWLINE')
@@ -1130,7 +1172,7 @@ class Name(Token):
             return cc
 
         elif value == 'def':
-            name = parser.expression(100)
+            name = parser.expression(Precedence.NAME_LITERAL)
             parser.ns.push_new(return_name=name)
             parser.match('(')
             parser.maybe_match('NEWLINE')
@@ -1138,9 +1180,9 @@ class Name(Token):
             kw_args = []
 
             while parser.watch(')'):
-                arg_name = parser.expression(40)
+                arg_name = parser.expression(Precedence.AND)
                 if parser.maybe_match('='):
-                    kw_args.append((arg_name, parser.expression(40)))
+                    kw_args.append((arg_name, parser.expression(Precedence.AND)))
                 else:
                     arg_names.append(arg_name)
                 parser.maybe_match('NEWLINE')
@@ -1160,17 +1202,17 @@ class Name(Token):
             parser.ns.pop()
             return flet_node
         elif value == 'for':
-            in_node = parser.expression(40)
+            in_node = parser.expression(Precedence.AND)
             parser.match(':')
             parser.match('NEWLINE')
-            body = parser.expression(10)
+            body = parser.expression(Precedence.STATEMENT_LEVEL)  # Parse for body
             # parser.ns.pop()
             return ForLoop(in_node, body)
         elif value == 'use':
-            right = parser.expression(5)
+            right = parser.expression(Precedence.RETURN_YIELD)
             return UsePackage(right)
         elif value == 'not':
-            right = parser.expression(50)
+            right = parser.expression(Precedence.NOT)
             return Call('NOT', [right])
         else:
             if value == value.upper():
@@ -1193,7 +1235,7 @@ class Name(Token):
 @register
 class LParen(Token):
     name = '('
-    lbp = 150  # Function calls have high precedence
+    lbp = Precedence.ATTRIBUTE_CALL_INDEX
     start_chars = {'('}
     callable_lefts = {'getitem',
                       'getattr',
@@ -1208,9 +1250,9 @@ class LParen(Token):
             args = []
             kw_args = []
             while parser.watch(')'):
-                arg = parser.expression(30)
+                arg = parser.expression(Precedence.FUNCTION_ARG)
                 if parser.maybe_match('='):
-                    kw_args.append((arg, parser.expression(30)))
+                    kw_args.append((arg, parser.expression(Precedence.FUNCTION_ARG)))
                 else:
                     args.append(arg)
                 parser.maybe_match('NEWLINE')
@@ -1235,14 +1277,14 @@ class LParen(Token):
 
 @register
 class LBracket(Token):
-    lbp = 150  # High precedence for indexing/slicing
+    lbp = Precedence.ATTRIBUTE_CALL_INDEX
     start_chars = {'['}
     name = '['
 
     def nud(self, parser, value):
         values = []
         while parser.watch(']'):
-            expr = parser.expression(30)
+            expr = parser.expression(Precedence.FUNCTION_ARG)
             values.append(expr)
             parser.maybe_match(',')
         return List(values)
@@ -1254,7 +1296,7 @@ class LBracket(Token):
         while parser.watch(']'):
             # Parse component if there is one
             if parser.token_handler.name not in (':', ']'):
-                component = parser.expression(20)
+                component = parser.expression(Precedence.COMPREHENSION)
                 components.append(component)
             else:
                 components.append(None)
@@ -1285,10 +1327,10 @@ class LBrace(Token):
         key_vals = []
         cls = 'set'
         while parser.watch('}'):
-            key = parser.expression(40)  # Parse at higher precedence to avoid comma operators
+            key = parser.expression(Precedence.AND)
             if parser.maybe_match(':'):
                 cls = 'dict'
-                val = parser.expression(40)
+                val = parser.expression(Precedence.AND)
             else:
                 val = None
             key_vals.append((key, val))
@@ -1311,12 +1353,12 @@ class NumberToken(Token):
 
 @register
 class Dot(Token):
-    lbp = 150  # Attribute access has high precedence
+    lbp = Precedence.ATTRIBUTE_CALL_INDEX
     start_chars = {'.'}
     name = 'DOT'
 
     def led(self, parser, left):
-        right = parser.expression(150)
+        right = parser.expression(Precedence.ATTRIBUTE_CALL_INDEX)
         if right.kind == 'number' and left.kind == 'number':
             return Number(f'{left.value}.{right.value}')
         return AttrLookup(left, right)
@@ -1404,12 +1446,12 @@ class Newline(Token):
 class Comma(Token):
     name = ','
     start_chars = ','
-    lbp = 15  # Comma has very low precedence
+    lbp = Precedence.COMMA
 
     def led(self, parser, left):
-        values = [left, parser.expression(15)]
+        values = [left, parser.expression(Precedence.COMMA)]
         while parser.maybe_match(','):
-            values.append(parser.expression(15))
+            values.append(parser.expression(Precedence.COMMA))
 
         return Tuple(values)
 

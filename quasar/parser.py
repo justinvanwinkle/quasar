@@ -1,10 +1,10 @@
 from sys import stdout
 
-from .pratt import PrattParser
-from .token_defs import all_ops
-from .token_defs import Block
-from .token_defs import Endblock
-from .token_defs import Module
+from quasar.pratt import PrattParser
+from quasar.token_defs import all_ops
+from quasar.token_defs import Block
+from quasar.token_defs import Endblock
+from quasar.token_defs import Module
 
 
 class Namespace:

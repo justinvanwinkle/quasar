@@ -1,9 +1,9 @@
 import tokenize
 from io import StringIO
 
-from .parser import grammar
-from .pratt import Parser
-from .token_names import token_names
+from quasar.token_defs import all_ops
+from quasar.parser import MuleParser
+from tokenize import tok_name as token_names
 
 statements = {'def', 'class', 'assert'}
 
@@ -44,9 +44,7 @@ class Quasar:
         self.source = tokenize.open(fn).read()
 
     def parse(self):
-        tokens = tokenizer(self.source)
-
-        parser = Parser(grammar, tokens)
+        parser = MuleParser(self.source, all_ops, filename=self.fn)
         print(parser.parse())
 
 
