@@ -45,19 +45,19 @@ def syntax_error_with_location(message, parser=None, token=None):
     """Create a SyntaxError with line and column information."""
     if token is None and parser is not None:
         token = getattr(parser, 'token_handler', None)
-    
+
     if token is not None:
         line = getattr(token, 'line', 'unknown')
         column = getattr(token, 'column', 'unknown')
     else:
         line = 'unknown'
         column = 'unknown'
-    
+
     if parser is not None:
         filename = getattr(parser, 'filename', 'unknown')
     else:
         filename = 'unknown'
-    
+
     return SyntaxError(f'{message} at {filename}:{line}:{column}')
 
 
@@ -1242,12 +1242,9 @@ class Name(Token):
                 return_expr = parser.expression(Precedence.RETURN_YIELD)
             return Yield(return_expr)
 
-        elif value in ('class', 'condition'):
-            name = parser.expression(Precedence.NAME_LITERAL)  # Parse just the class/condition name
-            if value == 'class':
-                cc = CLOSClass(name)
-            else:
-                cc = Condition(name)
+        elif value == 'class':
+            name = parser.expression(Precedence.NAME_LITERAL)  # Parse just the class name
+            cc = CLOSClass(name)
             if parser.maybe_match('('):
                 while parser.watch(')'):
                     cc.bases.append(parser.expression(Precedence.AND))
@@ -1323,7 +1320,7 @@ class Name(Token):
             # Parse: left if condition else right
             condition = parser.expression(Precedence.OR)  # Use OR precedence for condition
             parser.match('ELSE')
-            false_expr = parser.expression(Precedence.CONDITIONAL)
+            false_expr = parser.expression(Precedence.CONDITIONAL - 1)
             return ConditionalExpression(left, condition, false_expr)
         raise Exception('Cannot get here?')
 
