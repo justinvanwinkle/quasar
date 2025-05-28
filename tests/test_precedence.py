@@ -1,6 +1,5 @@
 """Test operator precedence to ensure it matches Python's precedence rules."""
 
-from pprint import pprint
 
 import pytest
 
@@ -120,46 +119,33 @@ def test_comparison_precedence():
 def test_boolean_operators_precedence():
     """Test boolean operator precedence."""
     # AND before OR (if both implemented)
-    try:
-        expr = parse_expr("x or y and z")
-        if hasattr(expr, 'op'):
-            # Should be x or (y and z)
-            if expr.op == 'OR':
-                assert expr.right.kind == 'binary_op'
-                assert expr.right.op == 'AND'
-    except:
-        # OR might not be implemented yet
-        pass
+    expr = parse_expr("x or y and z")
+    if hasattr(expr, 'op'):
+        # Should be x or (y and z)
+        if expr.op == 'OR':
+            assert expr.right.kind == 'binary_op'
+            assert expr.right.op == 'AND'
 
     # NOT before AND
-    try:
-        expr = parse_expr("not x and y")
-        # Should be (not x) and y
-        if expr.kind == 'binary_op' and expr.op == 'AND':
-            assert expr.left.kind == 'call'  # not is likely parsed as a call
-    except:
-        pass
+    expr = parse_expr("not x and y")
+    # Should be (not x) and y
+    if expr.kind == 'binary_op' and expr.op == 'AND':
+        assert expr.left.kind == 'call'  # not is likely parsed as a call
 
 
 def test_bitwise_operators_precedence():
     """Test bitwise operator precedence."""
     # & before |
-    try:
-        expr = parse_expr("x | y & z")
-        if expr.kind == 'binary_op' and expr.op == '|':
-            assert expr.right.kind == 'binary_op'
-            assert expr.right.op == '&'
-    except:
-        pass
+    expr = parse_expr("x | y & z")
+    if expr.kind == 'binary_op' and expr.op == '|':
+        assert expr.right.kind == 'binary_op'
+        assert expr.right.op == '&'
 
     # Shifts before &
-    try:
-        expr = parse_expr("x & y << 2")
-        if expr.kind == 'binary_op' and expr.op == '&':
-            assert expr.right.kind == 'binary_op'
-            assert expr.right.op == '<<'
-    except:
-        pass
+    expr = parse_expr("x & y << 2")
+    if expr.kind == 'binary_op' and expr.op == '&':
+        assert expr.right.kind == 'binary_op'
+        assert expr.right.op == '<<'
 
 
 def test_function_call_precedence():
@@ -181,16 +167,12 @@ def test_function_call_precedence():
 
 def test_indexing_precedence():
     """Test indexing and slicing precedence."""
-    try:
-        # Indexing binds tight
-        expr = parse_expr("arr[0] + 1")
-        assert expr.kind == 'binary_op'
-        assert expr.op == '+'
-        assert expr.left.kind == 'getitem'
-        assert expr.right.value == '1'
-    except:
-        # Indexing might not be working yet
-        pass
+    # Indexing binds tight
+    expr = parse_expr("arr[0] + 1")
+    assert expr.kind == 'binary_op'
+    assert expr.op == '+'
+    assert expr.left.kind == 'getitem'
+    assert expr.right.value == '1'
 
 
 def test_complex_expression():
@@ -238,12 +220,9 @@ def test_assignment_precedence():
     """Test that assignment has lowest precedence."""
     # This is tested implicitly since we wrap everything in "result = ..."
     # But let's test compound assignment if available
-    try:
-        expr = parse_expr("x if True else y")
-        # Conditional expressions should bind looser than most things
-        # but this might not be implemented yet
-    except:
-        pass
+    parse_expr("x if True else y")
+    # Conditional expressions should bind looser than most things
+    # but this might not be implemented yet
 
 
 def run_precedence_demonstration():
@@ -384,18 +363,6 @@ def run_precedence_demonstration():
     ('x == y + z', 'x == (y + z)'),
     ('a is b + c', 'a is (b + c)'),
 
-
-
-
-
-
-
-
-
-
-
-
-
     # Nested function calls with complex args
     ('f(g(h(x + y)), z * w)', 'f(g(h((x + y))), (z * w))'),
     ('obj.method(a + b, c=d * e)', 'obj.method((a + b), c=(d * e))'),
@@ -405,9 +372,3 @@ def run_precedence_demonstration():
 def test_precedence_equivalence(code1, code2):
     """Test that expressions with redundant parentheses are equivalent."""
     assert_same_precedence(code1, code2)
-
-
-
-
-if __name__ == "__main__":
-    run_precedence_demonstration()

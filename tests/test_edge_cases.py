@@ -1,4 +1,3 @@
-from pprint import pprint
 
 from quasar.parser import MuleParser
 from quasar.token_defs import all_ops
@@ -148,7 +147,7 @@ def test_lambda_function():
         p = MuleParser(code, all_ops, filename='test.py')
         root = p.parse()
         # Lambda might not be implemented yet
-        assignment = root.body.forms[0]
+        root.body.forms[0]
         # Check if lambda is parsed as a special construct
     except Exception:
         # Lambda not implemented, that's okay

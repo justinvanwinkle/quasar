@@ -13,6 +13,7 @@ pytest = "^8.2.0"
 ipython = "^8.24.0"
 ipdb = "^0.13.13"
 isort = "^5.13.2"
+ruff = "^0.11.11"
 
 [build-system]
 requires = ["poetry>=0.12"]

@@ -821,6 +821,7 @@ class BinOpToken(EnumeratedToken):
         '/': Precedence.MULTIPLICATION,
         '//': Precedence.MULTIPLICATION,
         '<': Precedence.IN_IS,
+        '<=': Precedence.IN_IS,
         '<<': Precedence.SHIFTS,
         '>': Precedence.IN_IS,
         '>=': Precedence.IN_IS,
@@ -834,9 +835,14 @@ class BinOpToken(EnumeratedToken):
 
     def led(self, parser, left):
         op = self.op_map.get(self.value, self.value)
+        # Exponentiation is right-associative
+        if self.value == '**':
+            right_precedence = self.lbp_map[self.value] - 1
+        else:
+            right_precedence = self.lbp_map[self.value]
         return BinaryOperator(op,
                               left,
-                              parser.expression(self.lbp_map[self.value]))
+                              parser.expression(right_precedence))
 
     def nud(self, parser, value):
         if value == '*':
@@ -871,7 +877,8 @@ class Colon(Token):
     name = ':'
 
     def match(self, c):
-        if c not in ' \n()' and self.value != '::':
+        # Only match : to create :: for type annotations
+        if self.value == ':' and c == ':':
             return True
         return False
 
@@ -919,7 +926,7 @@ class AssignOrEquals(EnumeratedToken):
                 return Setf(left, right)
 
         else:
-            return Equality(left, parser.expression())
+            return Equality(left, parser.expression(self.lbp_map['==']))
 
 
 @register
@@ -927,7 +934,7 @@ class NotEqual(EnumeratedToken):
     lbp_map = {'!=': Precedence.IN_IS}
 
     def led(self, parser, left):
-        return NotEquality(left, parser.expression())
+        return NotEquality(left, parser.expression(self.lbp_map['!=']))
 
 
 @register
@@ -1228,7 +1235,7 @@ class Name(Token):
             in_node = parser.expression()
             return ForExpression(left, in_node)
         elif self.value == 'and':
-            return BinaryOperator('AND', left, parser.expression())
+            return BinaryOperator('AND', left, parser.expression(Precedence.AND))
         raise Exception('Cannot get here?')
 
 
@@ -1293,10 +1300,11 @@ class LBracket(Token):
         components = []
         is_slice = False
 
-        while parser.watch(']'):
+        # Parse the index/slice expression
+        while parser.token_handler.name != ']':
             # Parse component if there is one
-            if parser.token_handler.name not in (':', ']'):
-                component = parser.expression(Precedence.COMPREHENSION)
+            if parser.token_handler.name != ':':
+                component = parser.expression(Precedence.FUNCTION_ARG)
                 components.append(component)
             else:
                 components.append(None)
@@ -1304,11 +1312,13 @@ class LBracket(Token):
             # Check for colon (slice indicator)
             if parser.maybe_match(':'):
                 is_slice = True
-                # After colon, we might have another component or nothing
-                continue
+                # After colon, continue to parse next component
             else:
-                # No colon, we're done with this component
+                # No colon, we're done
                 break
+        
+        # Consume the closing ]
+        parser.match(']')
 
         # If it's a simple index access (no colons), return GetItem
         if not is_slice and len(components) == 1 and components[0] is not None:

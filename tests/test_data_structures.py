@@ -1,4 +1,3 @@
-from pprint import pprint
 
 from quasar.parser import MuleParser
 from quasar.token_defs import all_ops
@@ -112,9 +111,9 @@ def test_list_comprehension():
         p = MuleParser(code, all_ops, filename='test.py')
         root = p.parse()
         # If it parses, check the structure
-        assignment = root.body.forms[0]
+        root.body.forms[0]
         # The exact structure will depend on implementation
-    except Exception as e:
+    except Exception:
         # If not implemented, that's okay for now
         pass
 

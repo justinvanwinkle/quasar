@@ -1,4 +1,3 @@
-from pprint import pprint
 
 from quasar.parser import MuleParser
 from quasar.token_defs import all_ops
