@@ -22,13 +22,13 @@ def normalize_ast(node):
     """
     if not hasattr(node, 'to_dict'):
         return node
-    
+
     node_dict = node.to_dict()
-    
+
     # For tuples with single elements (often created by parentheses), unwrap them
     if node_dict.get('kind') == 'tuple' and len(node_dict.get('values', [])) == 1:
         return normalize_ast(node.values[0])
-    
+
     # Recursively normalize nested structures
     if 'left' in node_dict and hasattr(node_dict['left'], 'to_dict'):
         node_dict['left'] = normalize_ast(getattr(node, 'left'))
@@ -38,7 +38,7 @@ def normalize_ast(node):
         node_dict['values'] = [normalize_ast(val) for val in getattr(node, 'values', [])]
     if 'args' in node_dict:
         node_dict['args'] = [normalize_ast(arg) for arg in getattr(node, 'args', [])]
-    
+
     return node_dict
 
 
@@ -46,17 +46,17 @@ def assert_same_precedence(code1, code2):
     """
     Assert that two expressions have the same precedence structure.
     This ignores parentheses and focuses on the actual operator precedence.
-    
+
     Example:
         assert_same_precedence('1 + (2 * 3)', '1 + 2 * 3')  # passes
         assert_same_precedence('(1 + 2) * 3', '1 + 2 * 3')  # fails with detailed message
     """
     ast1 = parse_expr(code1)
     ast2 = parse_expr(code2)
-    
+
     norm1 = normalize_ast(ast1)
     norm2 = normalize_ast(ast2)
-    
+
     assert norm1 == norm2, f"Precedence differs:\n  {code1} -> {norm1}\n  {code2} -> {norm2}"
 
 
@@ -277,23 +277,176 @@ def run_precedence_demonstration():
 
 
 @pytest.mark.parametrize("code1,code2", [
-    # Basic arithmetic precedence - these should be equivalent
+    # Basic arithmetic precedence
     ('1 + 2 * 3', '1 + (2 * 3)'),
     ('2 ** 3 * 4', '(2 ** 3) * 4'),
-    ('a + b - c', '(a + b) - c'),  # Left associative
-    ('x * y / z', '(x * y) / z'),  # Left associative
-    
-    # Complex arithmetic with redundant parentheses
-    ('a + b * c + d', 'a + (b * c) + d'),
-    ('a + b * c + d', '(a + (b * c)) + d'),
-    
-    # Exponentiation precedence
-    ('2 * 3 ** 4 + 5', '2 * (3 ** 4) + 5'),
-    ('2 * 3 ** 4 + 5', '(2 * (3 ** 4)) + 5'),
-    
-    # Comparison precedence
-    ('1 + 2 == 3', '(1 + 2) == 3'),
-    ('x < y + 1', 'x < (y + 1)'),
+    ('a + b - c', '(a + b) - c'),
+    ('x * y / z', '(x * y) / z'),
+    ('a - b + c', '(a - b) + c'),
+    ('x / y * z', '(x / y) * z'),
+    ('2 * 3 % 4', '(2 * 3) % 4'),
+    ('a % b + c', '(a % b) + c'),
+    ('a // b + c', '(a // b) + c'),
+
+    # Exponentiation precedence (should be right associative)
+    ('2 ** 3 ** 4', '2 ** (3 ** 4)'),  # BUG: Parser likely does left-associative
+    ('a ** b * c', '(a ** b) * c'),
+    ('x + y ** z', 'x + (y ** z)'),
+    ('a * b ** c + d', '(a * (b ** c)) + d'),
+    ('x ** y ** z ** w', 'x ** (y ** (z ** w))'),  # BUG: Multiple right-associative
+
+    # Bitwise operators
+    ('a | b & c', 'a | (b & c)'),
+    ('x ^ y & z', 'x ^ (y & z)'),
+    ('a & b << c', 'a & (b << c)'),
+    ('x << y + z', 'x << (y + z)'),
+    ('a + b >> c', '(a + b) >> c'),
+    ('x | y ^ z & w', 'x | (y ^ (z & w))'),
+    ('a & b & c', '(a & b) & c'),  # Left associative
+    ('x | y | z', '(x | y) | z'),  # Left associative
+    ('a ^ b ^ c', '(a ^ b) ^ c'),  # Left associative
+
+    # Comparison operators
+    ('a + b == c * d', '(a + b) == (c * d)'),
+    ('x < y + z', 'x < (y + z)'),
+    ('a * b > c / d', '(a * b) > (c / d)'),
+    ('x + y != z - w', '(x + y) != (z - w)'),
+    ('a ** b < c ** d', '(a ** b) < (c ** d)'),
+    ('a <= b + c', 'a <= (b + c)'),
+    ('x >= y * z', 'x >= (y * z)'),
+
+    # Chained comparisons (Python-specific)
+    ('1 < x < 10', '(1 < x) < 10'),  # BUG: Should handle chained comparisons specially
+    ('a == b == c', '(a == b) == c'),  # BUG: Chained equality
+    ('x < y <= z', '(x < y) <= z'),  # BUG: Mixed chained comparisons
+
+    # Boolean operators
+    ('a and b or c', '(a and b) or c'),
+    ('x or y and z', 'x or (y and z)'),
+    ('not a and b', '(not a) and b'),
+    ('x < y or z > w', '(x < y) or (z > w)'),
+    ('a == b and c < d', '(a == b) and (c < d)'),  # BUG: May fail
+    ('not not x', 'not (not x)'),  # Double NOT
+    ('a and b and c', '(a and b) and c'),  # Left associative
+    ('x or y or z', '(x or y) or z'),  # Left associative
+
+    # Function calls and attribute access
+    ('obj.attr + 1', '(obj.attr) + 1'),
+    ('func() * 2', '(func()) * 2'),
+    ('obj.method() + x', '(obj.method()) + x'),
+    ('a.b.c * d', '((a.b).c) * d'),
+    ('func(x) + func(y)', '(func(x)) + (func(y))'),
+    ('obj.attr.method()', '(obj.attr).method()'),
+    ('func().attr + 1', '(func()).attr + 1'),
+
+    # List indexing and slicing (likely to fail)
+    ('arr[i] + 1', '(arr[i]) + 1'),  # BUG: Indexing parsing
+    ('matrix[i][j] * 2', '((matrix[i])[j]) * 2'),  # BUG: Multiple indexing
+    ('arr[i + 1] * 2', '(arr[(i + 1)]) * 2'),  # BUG: Expression in index
+    ('lst[1:5] + other', '(lst[1:5]) + other'),  # BUG: Slicing syntax
+    ('data[:10] * 2', '(data[:10]) * 2'),  # BUG: Slice with missing start
+    ('items[::2] + more', '(items[::2]) + more'),  # BUG: Slice with step
+
+    # Complex mixed expressions
+    ('a + b * c.attr', 'a + (b * (c.attr))'),
+    ('func(x) ** 2 + y', '((func(x)) ** 2) + y'),
+    ('not a < b or c', '(not (a < b)) or c'),
+    ('a.b + c[d] * e', '(a.b) + ((c[d]) * e)'),  # BUG: Indexing in expression
+    ('x + y == z and w', '((x + y) == z) and w'),  # BUG: May fail
+    ('arr[i + j] == target and found', '((arr[(i + j)]) == target) and found'),  # BUG: Complex
+
+    # Comma operator (tuple creation)
+    ('a + b, c * d', '(a + b), (c * d)'),
+    ('func(x), y + z', '(func(x)), (y + z)'),
+    ('x == y, z < w', '(x == y), (z < w)'),  # BUG: May fail with comparisons
+    ('a, b, c + d', '(a, b), (c + d)'),  # BUG: Multiple commas
+    ('f(a, b), g(c, d)', '(f(a, b)), (g(c, d))'),  # BUG: Function args vs tuple
+
+    # String operations
+    ('s1 + s2 == s3', '(s1 + s2) == s3'),
+    ('"hello" + "world" * 2', '("hello") + (("world") * 2)'),
+    ("'a' + 'b' * 3", "('a') + (('b') * 3)"),
+    ('f"x={x}" + s', '(f"x={x}") + s'),  # BUG: f-strings likely not supported
+
+    # Unary operators
+    ('-x + y', '(-x) + y'),  # Unary minus
+    ('+x * y', '(+x) * y'),  # Unary plus
+    ('~x & y', '(~x) & y'),  # Bitwise NOT
+    ('-a ** b', '-(a ** b)'),  # BUG: Unary vs exponentiation precedence
+    ('not x == y', 'not (x == y)'),  # NOT vs comparison
+
+    # Complex nested expressions
+    ('a + b * c ** d - e / f % g', '(a + (b * (c ** d))) - ((e / f) % g)'),
+    ('x | y ^ z & w << v + u', 'x | (y ^ (z & (w << (v + u))))'),
+    ('func(a + b) * obj.attr ** 2', '(func((a + b))) * ((obj.attr) ** 2)'),
+    ('not a and b or c and d', '((not a) and b) or (c and d)'),
+
+    # Set/dict operations
+    ('{a, b} | {c}', '({a, b}) | ({c})'),
+    ('{a} & {b} | {c}', '({a} & {b}) | {c}'),  # Set operations precedence
+    ('a in {x, y} and b', '(a in {x, y}) and b'),  # BUG: 'in' operator
+
+    # Assignment-like operations
+    ('x == y + z', 'x == (y + z)'),
+    ('a is b + c', 'a is (b + c)'),  # 'is' operator
+    ('x in y + z', 'x in (y + z)'),  # BUG: 'in' operator precedence
+
+    # Conditional expressions (ternary)
+    ('a if b else c + d', 'a if b else (c + d)'),  # BUG: Ternary not implemented
+    ('x + y if z else w * v', '(x + y) if z else (w * v)'),  # BUG: Complex ternary
+
+    # Lambda expressions
+    ('lambda x: x + 1', 'lambda x: (x + 1)'),  # BUG: Lambda not implemented
+    ('f(lambda x: x * 2)', 'f(lambda x: (x * 2))'),  # BUG: Lambda in function call
+
+    # List/dict comprehensions
+    ('[x + 1 for x in lst]', '[(x + 1) for x in lst]'),  # BUG: List comprehension
+    ('{x: x*2 for x in d}', '{x: (x*2) for x in d}'),  # BUG: Dict comprehension
+    ('[x for x in lst if x > 0]', '[x for x in lst if (x > 0)]'),  # BUG: Comprehension with condition
+
+    # Generator expressions
+    ('sum(x + 1 for x in lst)', 'sum((x + 1) for x in lst)'),  # BUG: Generator expression
+
+    # Multiple assignment and unpacking
+    ('a, b = c + d, e * f', '(a, b) = ((c + d), (e * f))'),  # BUG: Assignment parsing
+    ('x, y, z = func()', '(x, y, z) = func()'),  # BUG: Multiple unpacking
+    ('*args, last = items', '(*args, last) = items'),  # BUG: Starred expressions
+
+    # Augmented assignment
+    ('x += y * z', 'x += (y * z)'),  # BUG: Augmented assignment
+    ('a **= b + c', 'a **= (b + c)'),  # BUG: Power assignment
+    ('lst[i] += x', 'lst[i] += x'),  # BUG: Augmented assignment to index
+
+    # Decorator syntax
+    ('@dec\ndef f(): pass', '@dec\ndef f(): pass'),  # BUG: Decorators
+    ('@a.b\ndef f(): pass', '@(a.b)\ndef f(): pass'),  # BUG: Complex decorators
+
+    # Yield expressions
+    ('x + yield y', 'x + (yield y)'),  # BUG: Yield expressions
+    ('yield from x + y', 'yield from (x + y)'),  # BUG: Yield from
+
+    # Walrus operator (Python 3.8+)
+    ('(x := a + b) * 2', '(x := (a + b)) * 2'),  # BUG: Assignment expressions
+
+    # Matrix multiplication (Python 3.5+)
+    ('a @ b + c', '(a @ b) + c'),  # BUG: @ operator
+
+    # Advanced indexing
+    ('a[b, c] + d', '(a[b, c]) + d'),  # BUG: Tuple indexing
+    ('matrix[1, :] * 2', '(matrix[1, :]) * 2'),  # BUG: Slice in tuple index
+
+    # Exception handling in expressions
+    ('x + y if z else raise ValueError', 'BUG'),  # BUG: Raise in expression context
+
+    # Nested function calls with complex args
+    ('f(g(h(x + y)), z * w)', 'f(g(h((x + y))), (z * w))'),
+    ('obj.method(a + b, c=d * e)', 'obj.method((a + b), c=(d * e))'),
+
+    # Type annotations (if supported)
+    ('x: int = y + z', 'x: int = (y + z)'),  # BUG: Type annotations
+
+    # Async/await (if supported)
+    ('await func() + x', '(await func()) + x'),  # BUG: Await expressions
 ])
 def test_precedence_equivalence(code1, code2):
     """Test that expressions with redundant parentheses are equivalent."""
