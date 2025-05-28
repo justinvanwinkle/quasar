@@ -791,6 +791,16 @@ class String(FSTNode):
         return repr(self.value)
 
 
+class FString(FSTNode):
+    kind = 'fstring'
+
+    def __init__(self, value):
+        self.value = value  # Should be the full f-string like f"hello {name}"
+
+    def py(self):
+        return self.value  # Return as-is since it's already properly formatted
+
+
 class LispLiteral(FSTNode):
     kind = 'cl_literal'
 
@@ -1335,6 +1345,12 @@ class Name(Token):
         elif value == 'not':
             right = parser.expression(Precedence.NOT)
             return Call('NOT', [right])
+        elif value == 'f' and parser.token_handler.name == 'STRING':
+            # Handle f-strings: f"..." or f'...'
+            string_token = parser.token_handler
+            parser.feed()  # consume the string token
+            # Create an f-string by prefixing the string value with 'f'
+            return FString(f'f{string_token.value}')
         else:
             if value == value.upper():
                 value = value.replace('_', '-')
@@ -1349,7 +1365,7 @@ class Name(Token):
             in_node = parser.expression()
             return ForExpression(left, in_node)
         elif self.value == 'and':
-            return BinaryOperator('AND', left, parser.expression(Precedence.AND))
+            return BinaryOperator('and', left, parser.expression(Precedence.AND))
         elif self.value == 'if':
             # Parse: left if condition else right
             condition = parser.expression(Precedence.OR)  # Use OR precedence for condition

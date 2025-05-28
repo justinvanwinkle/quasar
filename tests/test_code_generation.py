@@ -385,7 +385,7 @@ def test_class_with_decorated_methods():
     @classmethod
     def from_string(cls, s):
         return cls()
-    
+
     @property
     def name(self):
         return self._name"""
@@ -395,6 +395,48 @@ def test_class_with_decorated_methods():
 
     generated_code = original_ast.py()
 
+    p2 = MuleParser(generated_code, all_ops, filename='test.py')
+    regenerated_ast = p2.parse()
+
+    assert original_ast.to_dict() == regenerated_ast.to_dict()
+
+
+def test_f_string_single_line_formatting():
+    """Test that f-strings are properly formatted on single line."""
+    code = """def __repr__(self):
+    return f'Token {self.type} {self.value!r}'"""
+
+    p = MuleParser(code, all_ops, filename='test.py')
+    root = p.parse()
+    generated = root.py()
+
+    # F-string should be on one line, not broken across multiple lines
+    lines = generated.strip().split('\n')
+    return_line = None
+    for line in lines:
+        if 'return' in line:
+            return_line = line.strip()
+            break
+
+    assert return_line is not None
+    # Should be a complete f-string on one line
+    assert return_line.startswith("return f'Token")
+    assert return_line.endswith("{self.value!r}'")
+    # Should not have line breaks in the f-string
+    assert '\n' not in return_line
+
+
+def test_f_string_roundtrip():
+    """Test that f-strings roundtrip correctly."""
+    original_code = """message = f'Hello {name}, you have {count} items'
+debug = f'Value: {obj.attr!r}'"""
+
+    p1 = MuleParser(original_code, all_ops, filename='test.py')
+    original_ast = p1.parse()
+
+    generated_code = original_ast.py()
+
+    # Should be able to parse the generated code
     p2 = MuleParser(generated_code, all_ops, filename='test.py')
     regenerated_ast = p2.parse()
 

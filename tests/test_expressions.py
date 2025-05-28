@@ -158,3 +158,39 @@ c = None
     assert forms[0].right.__class__.__name__ == 'PythonTrue'
     assert forms[1].right.__class__.__name__ == 'PythonFalse'
     assert forms[2].right.kind == 'nil'
+
+
+def test_and_operator_preserves_lowercase():
+    """Test that 'and' operator stays as 'and', not converted to 'AND'."""
+    code = """if type == 'name' and value in statements:
+    type = value"""
+
+    p = MuleParser(code, all_ops, filename='test.py')
+    root = p.parse()
+    generated = root.py()
+
+    # Should contain 'and', not 'AND'
+    assert 'and' in generated
+    assert 'AND' not in generated
+
+
+def test_and_operator_roundtrip():
+    """Test that code with 'and' operator roundtrips correctly."""
+    original_code = """result = condition1 and condition2
+if x > 0 and y < 10:
+    print('valid')"""
+
+    p1 = MuleParser(original_code, all_ops, filename='test.py')
+    original_ast = p1.parse()
+
+    generated_code = original_ast.py()
+
+    # Generated code should still use 'and', not 'AND'
+    assert 'and' in generated_code
+    assert 'AND' not in generated_code
+
+    # Should be able to parse the generated code
+    p2 = MuleParser(generated_code, all_ops, filename='test.py')
+    regenerated_ast = p2.parse()
+
+    assert original_ast.to_dict() == regenerated_ast.to_dict()

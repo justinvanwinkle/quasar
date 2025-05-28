@@ -45,7 +45,7 @@ class Quasar:
 
     def parse(self):
         parser = MuleParser(self.source, all_ops, filename=self.fn)
-        print(parser.parse().py())
+        return parser.parse()
 
 
 def main(args):

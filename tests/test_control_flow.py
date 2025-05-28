@@ -278,7 +278,7 @@ def test_if_with_complex_condition():
     assert cond.kind == 'cond'
     condition = cond.clauses[0].condition
     assert condition.kind == 'binary_op'
-    assert condition.op == 'AND'
+    assert condition.op == 'and'
 
 
 def test_if_with_comparison_chain():
