@@ -1,6 +1,7 @@
 from quasar.parser import MuleParser
 from quasar.token_defs import all_ops
 
+
 simple_function_def = """\
 def hello():
     return 'world'
@@ -19,10 +20,14 @@ def test_simple_function_def():
     assert defun.body.kind == 'body'
 
 
+function_with_args = """\
+def greet(name, age):
+    return f'Hello {name}, you are {age}'
+"""
+
+
 def test_function_with_args():
-    code = """def greet(name, age):
-    return f'Hello {name}, you are {age}'"""
-    p = MuleParser(code, all_ops, filename='test.py')
+    p = MuleParser(function_with_args, all_ops, filename='test.py')
     root = p.parse()
 
     defun = root.body.forms[0]
@@ -34,10 +39,14 @@ def test_function_with_args():
     assert len(defun.kw_args) == 0
 
 
+function_with_default_args = """\
+def greet(name, age=25):
+    return f'Hello {name}'
+"""
+
+
 def test_function_with_default_args():
-    code = """def greet(name, age=25):
-    return f'Hello {name}'"""
-    p = MuleParser(code, all_ops, filename='test.py')
+    p = MuleParser(function_with_default_args, all_ops, filename='test.py')
     root = p.parse()
 
     defun = root.body.forms[0]
@@ -50,10 +59,14 @@ def test_function_with_default_args():
     assert defun.kw_args[0][1].value == '25'
 
 
+function_with_mixed_args = """\
+def complex_func(a, b, c=10, d='default'):
+    return a + b + c
+"""
+
+
 def test_function_with_mixed_args():
-    code = """def complex_func(a, b, c=10, d='default'):
-    return a + b + c"""
-    p = MuleParser(code, all_ops, filename='test.py')
+    p = MuleParser(function_with_mixed_args, all_ops, filename='test.py')
     root = p.parse()
 
     defun = root.body.forms[0]
@@ -69,11 +82,15 @@ def test_function_with_mixed_args():
     assert defun.kw_args[1][1].value == 'default'
 
 
-def test_function_with_multiline_body():
-    code = """def calculate(x, y):
+function_with_multiline_body = """\
+def calculate(x, y):
     result = x * y
-    return result + 1"""
-    p = MuleParser(code, all_ops, filename='test.py')
+    return result + 1
+"""
+
+
+def test_function_with_multiline_body():
+    p = MuleParser(function_with_multiline_body, all_ops, filename='test.py')
     root = p.parse()
 
     defun = root.body.forms[0]
@@ -84,10 +101,14 @@ def test_function_with_multiline_body():
     assert len(defun.body.forms) == 2
 
 
+function_with_return_none = """\
+def no_return():
+    x = 5
+"""
+
+
 def test_function_with_return_none():
-    code = """def no_return():
-    x = 5"""
-    p = MuleParser(code, all_ops, filename='test.py')
+    p = MuleParser(function_with_return_none, all_ops, filename='test.py')
     root = p.parse()
 
     defun = root.body.forms[0]
@@ -96,10 +117,14 @@ def test_function_with_return_none():
     assert defun.body.kind == 'body'
 
 
+function_with_explicit_return_none = """\
+def explicit_none():
+    return None
+"""
+
+
 def test_function_with_explicit_return_none():
-    code = """def explicit_none():
-    return None"""
-    p = MuleParser(code, all_ops, filename='test.py')
+    p = MuleParser(function_with_explicit_return_none, all_ops, filename='test.py')
     root = p.parse()
 
     defun = root.body.forms[0]
@@ -110,12 +135,16 @@ def test_function_with_explicit_return_none():
     assert return_stmt.return_expr.kind == 'nil'
 
 
-def test_function_with_early_return():
-    code = """def early_return(x):
+function_with_early_return = """\
+def early_return(x):
     if x > 0:
         return x
-    return 0"""
-    p = MuleParser(code, all_ops, filename='test.py')
+    return 0
+"""
+
+
+def test_function_with_early_return():
+    p = MuleParser(function_with_early_return, all_ops, filename='test.py')
     root = p.parse()
 
     defun = root.body.forms[0]
@@ -124,12 +153,16 @@ def test_function_with_early_return():
     assert len(defun.body.forms) == 2
 
 
-def test_nested_function():
-    code = """def outer(x):
+nested_function = """\
+def outer(x):
     def inner(y):
         return y * 2
-    return inner(x)"""
-    p = MuleParser(code, all_ops, filename='test.py')
+    return inner(x)
+"""
+
+
+def test_nested_function():
+    p = MuleParser(nested_function, all_ops, filename='test.py')
     root = p.parse()
 
     outer_defun = root.body.forms[0]
@@ -142,10 +175,14 @@ def test_nested_function():
     assert inner_defun.name.name == 'inner'
 
 
+function_with_pass = """\
+def empty_func():
+    pass
+"""
+
+
 def test_function_with_pass():
-    code = """def empty_func():
-    pass"""
-    p = MuleParser(code, all_ops, filename='test.py')
+    p = MuleParser(function_with_pass, all_ops, filename='test.py')
     root = p.parse()
 
     defun = root.body.forms[0]
@@ -155,11 +192,15 @@ def test_function_with_pass():
     assert pass_stmt.kind == 'nil'
 
 
+function_with_docstring = """\
+def documented():
+    '''This is a docstring'''
+    return True
+"""
+
+
 def test_function_with_docstring():
-    code = '''def documented():
-    """This is a docstring"""
-    return True'''
-    p = MuleParser(code, all_ops, filename='test.py')
+    p = MuleParser(function_with_docstring, all_ops, filename='test.py')
     root = p.parse()
 
     defun = root.body.forms[0]
@@ -171,14 +212,14 @@ def test_function_with_docstring():
     assert docstring.value == 'This is a docstring'
 
 
+function_args_with_newlines = """\
+def func_with_newlines(a, b, c=10):
+    return a + b + c
+"""
+
+
 def test_function_args_with_newlines():
-    code = """def func_with_newlines(
-    a,
-    b,
-    c=10
-):
-    return a + b + c"""
-    p = MuleParser(code, all_ops, filename='test.py')
+    p = MuleParser(function_args_with_newlines, all_ops, filename='test.py')
     root = p.parse()
 
     defun = root.body.forms[0]
