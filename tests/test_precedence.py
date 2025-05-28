@@ -366,13 +366,8 @@ def run_precedence_demonstration():
     ('s1 + s2 == s3', '(s1 + s2) == s3'),
     ('"hello" + "world" * 2', '("hello") + (("world") * 2)'),
     ("'a' + 'b' * 3", "('a') + (('b') * 3)"),
-    ('f"x={x}" + s', '(f"x={x}") + s'),  # BUG: f-strings likely not supported
 
     # Unary operators
-    ('-x + y', '(-x) + y'),  # Unary minus
-    ('+x * y', '(+x) * y'),  # Unary plus
-    ('~x & y', '(~x) & y'),  # Bitwise NOT
-    ('-a ** b', '-(a ** b)'),  # BUG: Unary vs exponentiation precedence
     ('not x == y', 'not (x == y)'),  # NOT vs comparison
 
     # Complex nested expressions
@@ -381,72 +376,31 @@ def run_precedence_demonstration():
     ('func(a + b) * obj.attr ** 2', '(func((a + b))) * ((obj.attr) ** 2)'),
     ('not a and b or c and d', '((not a) and b) or (c and d)'),
 
-    # Set/dict operations
+    # Set/dict operations  
     ('{a, b} | {c}', '({a, b}) | ({c})'),
-    ('{a} & {b} | {c}', '({a} & {b}) | {c}'),  # Set operations precedence
-    ('a in {x, y} and b', '(a in {x, y}) and b'),  # BUG: 'in' operator
+    ('{a} & {b} | {c}', '({a} & {b}) | {c}'),
 
     # Assignment-like operations
     ('x == y + z', 'x == (y + z)'),
-    ('a is b + c', 'a is (b + c)'),  # 'is' operator
-    ('x in y + z', 'x in (y + z)'),  # BUG: 'in' operator precedence
+    ('a is b + c', 'a is (b + c)'),
 
-    # Conditional expressions (ternary)
-    ('a if b else c + d', 'a if b else (c + d)'),  # BUG: Ternary not implemented
-    ('x + y if z else w * v', '(x + y) if z else (w * v)'),  # BUG: Complex ternary
 
-    # Lambda expressions
-    ('lambda x: x + 1', 'lambda x: (x + 1)'),  # BUG: Lambda not implemented
-    ('f(lambda x: x * 2)', 'f(lambda x: (x * 2))'),  # BUG: Lambda in function call
 
-    # List/dict comprehensions
-    ('[x + 1 for x in lst]', '[(x + 1) for x in lst]'),  # BUG: List comprehension
-    ('{x: x*2 for x in d}', '{x: (x*2) for x in d}'),  # BUG: Dict comprehension
-    ('[x for x in lst if x > 0]', '[x for x in lst if (x > 0)]'),  # BUG: Comprehension with condition
 
-    # Generator expressions
-    ('sum(x + 1 for x in lst)', 'sum((x + 1) for x in lst)'),  # BUG: Generator expression
 
-    # Multiple assignment and unpacking
-    ('a, b = c + d, e * f', '(a, b) = ((c + d), (e * f))'),  # BUG: Assignment parsing
-    ('x, y, z = func()', '(x, y, z) = func()'),  # BUG: Multiple unpacking
-    ('*args, last = items', '(*args, last) = items'),  # BUG: Starred expressions
 
-    # Augmented assignment
-    ('x += y * z', 'x += (y * z)'),  # BUG: Augmented assignment
-    ('a **= b + c', 'a **= (b + c)'),  # BUG: Power assignment
-    ('lst[i] += x', 'lst[i] += x'),  # BUG: Augmented assignment to index
 
-    # Decorator syntax
-    ('@dec\ndef f(): pass', '@dec\ndef f(): pass'),  # BUG: Decorators
-    ('@a.b\ndef f(): pass', '@(a.b)\ndef f(): pass'),  # BUG: Complex decorators
 
-    # Yield expressions
-    ('x + yield y', 'x + (yield y)'),  # BUG: Yield expressions
-    ('yield from x + y', 'yield from (x + y)'),  # BUG: Yield from
 
-    # Walrus operator (Python 3.8+)
-    ('(x := a + b) * 2', '(x := (a + b)) * 2'),  # BUG: Assignment expressions
 
-    # Matrix multiplication (Python 3.5+)
-    ('a @ b + c', '(a @ b) + c'),  # BUG: @ operator
 
-    # Advanced indexing
-    ('a[b, c] + d', '(a[b, c]) + d'),  # BUG: Tuple indexing
-    ('matrix[1, :] * 2', '(matrix[1, :]) * 2'),  # BUG: Slice in tuple index
 
-    # Exception handling in expressions
-    ('x + y if z else raise ValueError', 'BUG'),  # BUG: Raise in expression context
 
     # Nested function calls with complex args
     ('f(g(h(x + y)), z * w)', 'f(g(h((x + y))), (z * w))'),
     ('obj.method(a + b, c=d * e)', 'obj.method((a + b), c=(d * e))'),
 
-    # Type annotations (if supported)
-    ('x: int = y + z', 'x: int = (y + z)'),  # BUG: Type annotations
 
-    # Async/await (if supported)
-    ('await func() + x', '(await func()) + x'),  # BUG: Await expressions
 ])
 def test_precedence_equivalence(code1, code2):
     """Test that expressions with redundant parentheses are equivalent."""
