@@ -80,11 +80,11 @@ def register(cls):
 
 
 def fmt_args(lst):
-    return ', '.join(arg.cl() for arg in lst)
+    return ', '.join(arg.py() for arg in lst)
 
 
 def fmt_kwargs(lst):
-    return ', '.join(f'{name}={val}' for name, val in lst)
+    return ', '.join(f'{name.py()}={val.py()}' for name, val in lst)
 
 
 def fmt_argspec(args, kw_args):
@@ -136,8 +136,8 @@ class PythonTrue(FSTNode):
     def __init__(self):
         self.name = 'True'
 
-    def cl(self):
-        return '_True_'
+    def py(self):
+        return 'True'
 
 
 class PythonFalse(FSTNode):
@@ -146,8 +146,8 @@ class PythonFalse(FSTNode):
     def __init__(self):
         self.name = 'False'
 
-    def cl(self):
-        return '_False_'
+    def py(self):
+        return 'False'
 
 
 class DictLiteral(FSTNode):
@@ -156,9 +156,9 @@ class DictLiteral(FSTNode):
     def __init__(self, pairs):
         self.pairs = pairs
 
-    def cl(self):
-        pair_cl = ', '.join(f'{key}: {val}' for key, val in self.pairs)
-        return f'DictLiteral<{pair_cl}>'
+    def py(self):
+        pair_py = ', '.join(f'{key.py()}: {val.py()}' for key, val in self.pairs)
+        return f'{{{pair_py}}}'
 
 
 class SetLiteral(FSTNode):
@@ -167,8 +167,11 @@ class SetLiteral(FSTNode):
     def __init__(self, values):
         self.values = values
 
-    def cl(self):
-        return f'SetLiteral<{self.values}>'
+    def py(self):
+        if not self.values:
+            return 'set()'
+        values_py = ', '.join(val.py() for val in self.values)
+        return f'{{{values_py}}}'
 
 
 class Comment(FSTNode):
@@ -177,8 +180,8 @@ class Comment(FSTNode):
     def __init__(self, comment):
         self.comment = comment
 
-    def cl(self):
-        return f'_#{self.comment}_'
+    def py(self):
+        return f'#{self.comment}'
 
 
 class Raise(FSTNode):
@@ -187,8 +190,10 @@ class Raise(FSTNode):
     def __init__(self, exception=None):
         self.exception = exception
 
-    def cl(self):
-        return f'Raise<{self.exception}>'
+    def py(self):
+        if self.exception:
+            return f'raise {self.exception.py()}'
+        return 'raise'
 
 
 class Quote(FSTNode):
@@ -197,8 +202,8 @@ class Quote(FSTNode):
     def __init__(self, form):
         self.form = form
 
-    def cl(self):
-        return "'%s" % self.form
+    def py(self):
+        return f"'{self.form.py()}'"
 
 
 class PythonBody(FSTNode):
@@ -207,13 +212,12 @@ class PythonBody(FSTNode):
     def __init__(self, forms):
         self.forms = forms
 
-    def cl(self, indent='    '):
+    def py(self, indent='    '):
         rep = ''
         for form in self.forms:
-            lines = form.cl().splitlines()
+            lines = form.py().splitlines()
             for line in lines:
                 rep += indent + line + '\n'
-
         return rep
 
     def to_dict(self):
@@ -228,8 +232,8 @@ class PythonModule(FSTNode):
         self.module_name = module_name
         self.body = body
 
-    def cl(self):
-        return f'MODULE<{self.module_name}>\n' + self.body.cl(indent='')
+    def py(self):
+        return self.body.py(indent='')
 
 
 class Method(FSTNode):
@@ -240,8 +244,8 @@ class Method(FSTNode):
         self.class_name = class_name
         self.first_arg = defun.arg_names[0]
 
-    def cl(self):
-        return f'Method {self.defun}'
+    def py(self):
+        return self.defun.py()
 
 
 class CLOSClass(FSTNode):
@@ -343,11 +347,19 @@ class Def(FSTNode):
         self.kw_args = kw_args
         self.body = body
 
-    def cl(self):
-        defun = (f'Def {self.name} ({self.arg_names}, {self.kw_args})\n'
-                 f'{self.body.cl()}')
-
-        return defun
+    def py(self):
+        args_py = fmt_args(self.arg_names)
+        kwargs_py = fmt_kwargs(self.kw_args)
+        
+        params = []
+        if args_py:
+            params.append(args_py)
+        if kwargs_py:
+            params.append(kwargs_py)
+        
+        params_str = ', '.join(params)
+        
+        return f'def {self.name.py()}({params_str}):\n{self.body.py()}'
 
 
 class Import(FSTNode):
@@ -472,8 +484,8 @@ class Return(FSTNode):
     def __init__(self, return_expr):
         self.return_expr = return_expr
 
-    def cl(self):
-        return f'Return<{self.return_expr}>'
+    def py(self):
+        return f'return {self.return_expr.py()}'
 
 
 class Yield(FSTNode):
@@ -482,8 +494,8 @@ class Yield(FSTNode):
     def __init__(self, return_expr):
         self.return_expr = return_expr
 
-    def cl(self):
-        return f'Yield<{self.return_expr}>'
+    def py(self):
+        return f'yield {self.return_expr.py()}'
 
 
 class Symbol(FSTNode):
@@ -492,8 +504,8 @@ class Symbol(FSTNode):
     def __init__(self, name):
         self.name = name
 
-    def cl(self):
-        return f'Name<{self.name}>'
+    def py(self):
+        return self.name
 
 
 class WhileLoop(FSTNode):
@@ -528,8 +540,8 @@ class Find(In):
 class Nil(FSTNode):
     kind = 'nil'
 
-    def cl(self):
-        return 'NIL'
+    def py(self):
+        return 'None'
 
 
 class UsePackage(FSTNode):
@@ -548,8 +560,9 @@ class List(FSTNode):
     def __init__(self, values):
         self.values = values
 
-    def cl(self):
-        return f"List{self.values}"
+    def py(self):
+        values_py = ', '.join(val.py() for val in self.values)
+        return f'[{values_py}]'
 
 
 class GetItem(FSTNode):
@@ -559,8 +572,8 @@ class GetItem(FSTNode):
         self.left = left
         self.key = key
 
-    def cl(self):
-        return f'GetItem<{self.left}>[{self.key}]'
+    def py(self):
+        return f'{self.left.py()}[{self.key.py()}]'
 
 
 class Slice(FSTNode):
@@ -570,8 +583,9 @@ class Slice(FSTNode):
         self.left = left
         self.components = components
 
-    def cl(self):
-        return '[%s]' % ':'.join(self.components)
+    def py(self):
+        components_py = ':'.join(comp.py() if comp else '' for comp in self.components)
+        return f'{self.left.py()}[{components_py}]'
 
 
 class Tuple(FSTNode):
@@ -580,8 +594,11 @@ class Tuple(FSTNode):
     def __init__(self, values):
         self.values = values
 
-    def cl(self):
-        return "(%s,)" % ', '.join(self.clmap(self.values))
+    def py(self):
+        values_py = ', '.join(val.py() for val in self.values)
+        if len(self.values) == 1:
+            return f'({values_py},)'
+        return f'({values_py})'
 
 
 class Call(FSTNode):
@@ -592,9 +609,9 @@ class Call(FSTNode):
         self.args = args
         self.kw_args = kw_args
 
-    def cl(self):
+    def py(self):
         arg_spec = fmt_argspec(self.args, self.kw_args)
-        return f'Call<{self.left}>({arg_spec})'
+        return f'{self.left.py()}({arg_spec})'
 
 
 class Type(FSTNode):
@@ -608,11 +625,8 @@ class Type(FSTNode):
     def name(self):
         return self.left.name
 
-    def cl(self):
-        return '(the %s %s)' % (self.type, self.left)
-
-    def of_type_cl(self):
-        return '%s of-type %s' % (self.left, self.type)
+    def py(self):
+        return f'{self.left.py()}: {self.type.py()}'
 
 
 class Equality(FSTNode):
@@ -622,8 +636,8 @@ class Equality(FSTNode):
         self.left = left
         self.right = right
 
-    def cl(self):
-        return '%s == %s' % (self.left.cl(), self.right.cl())
+    def py(self):
+        return f'{self.left.py()} == {self.right.py()}'
 
 
 class NotEquality(FSTNode):
@@ -659,8 +673,8 @@ class Setf(FSTNode):
         self.left = left
         self.right = right
 
-    def cl(self):
-        return f'ASSIGN {self.left} = {self.right}'
+    def py(self):
+        return f'{self.left.py()} = {self.right.py()}'
 
 
 class Let(FSTNode):
@@ -695,8 +709,8 @@ class Number(FSTNode):
     def __init__(self, value):
         self.value = value
 
-    def cl(self):
-        return f'NUMBER<{self.value!r}>'
+    def py(self):
+        return self.value
 
 
 class BinaryOperator(FSTNode):
@@ -707,8 +721,8 @@ class BinaryOperator(FSTNode):
         self.left = left
         self.right = right
 
-    def cl(self):
-        return f'({self.left} {self.op} {self.right})'
+    def py(self):
+        return f'({self.left.py()} {self.op} {self.right.py()})'
 
 
 class AttrLookup(FSTNode):
@@ -718,8 +732,8 @@ class AttrLookup(FSTNode):
         self.name = name.name
         self.left = left
 
-    def cl(self):
-        return f"AttrLookup<{self.left}.{self.name}>"
+    def py(self):
+        return f'{self.left.py()}.{self.name}'
 
 
 class Splat(FSTNode):
@@ -735,8 +749,8 @@ class String(FSTNode):
     def __init__(self, value):
         self.value = value
 
-    def cl(self):
-        return f'{self.value!r}'
+    def py(self):
+        return repr(self.value)
 
 
 class LispLiteral(FSTNode):
@@ -746,7 +760,7 @@ class LispLiteral(FSTNode):
         self.literal = literal
         self.name = literal
 
-    def cl(self):
+    def py(self):
         return self.literal
 
 

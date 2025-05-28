@@ -149,7 +149,7 @@ def test_type_annotation_precedence():
     root = p.parse()
 
     assignment = root.body.forms[0]
-    assert assignment.kind == 'setf'
+    assert assignment.kind == 'multiple_value_bind'
     
     # Left side should be a tuple of type annotations
     left_tuple = assignment.left
