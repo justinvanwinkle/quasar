@@ -1521,9 +1521,9 @@ class Comma(Token):
         # Could be: x, y, z  or  x,  (trailing comma)
         values = [left]
 
-        # Check if this is a trailing comma case (followed by assignment)
-        if parser.token_handler.name == '=':
-            # Trailing comma case: "x, = ..."
+        # Check if this is a trailing comma case (followed by assignment or end)
+        if parser.token_handler.name in ('=', 'ENDBLOCK', 'NEWLINE'):
+            # Trailing comma case: "x, = ..." or "x = 1,"
             return Tuple(values)
 
         # Parse next expression for regular comma
@@ -1532,7 +1532,7 @@ class Comma(Token):
         # Continue parsing comma-separated values
         while parser.maybe_match(','):
             # Check for trailing comma after each comma
-            if parser.token_handler.name == '=':
+            if parser.token_handler.name in ('=', 'ENDBLOCK', 'NEWLINE'):
                 break
             values.append(parser.expression(Precedence.COMMA))
 
