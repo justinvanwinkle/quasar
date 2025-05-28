@@ -284,6 +284,17 @@ class CLOSClass(FSTNode):
                 self.slots = find_self_assignments(form)
             else:
                 self.methods.append(form)
+        elif form.kind == 'decorator':
+            # Check if the decorated item is a method
+            if form.wrapped.kind == 'defun':
+                if form.wrapped.name.name == '__init__':
+                    self.constructor = form
+                    self.slots = find_self_assignments(form.wrapped)
+                else:
+                    self.methods.append(form)
+            else:
+                # Non-method decorated items (rare in classes)
+                self.methods.append(form)
 
 
     def py(self):
@@ -321,6 +332,17 @@ class Condition(CLOSClass):
             bases_str = f'({bases_py})'
 
         return f'class {self.name.py()}{bases_str}:\n    pass'
+
+
+class Decorator(FSTNode):
+    kind = 'decorator'
+
+    def __init__(self, decorator_expr, wrapped):
+        self.decorator_expr = decorator_expr
+        self.wrapped = wrapped
+
+    def py(self):
+        return f'@{self.decorator_expr.py()}\n{self.wrapped.py()}'
 
 
 class Def(FSTNode):
@@ -1485,11 +1507,10 @@ class At(EnumeratedToken):
     name = '@'
 
     def nud(self, parser, value):
-        # decorator_call = parser.expression()
-        parser.expression()
+        decorator_call = parser.expression()
         parser.match('NEWLINE')
         wrapped = parser.expression()
-        return PythonBody([wrapped])
+        return Decorator(decorator_call, wrapped)
 
 
 class EscapingToken(Token):

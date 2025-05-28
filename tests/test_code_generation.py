@@ -348,3 +348,54 @@ print(result)"""
     regenerated_ast = p2.parse()
 
     assert original_ast.to_dict() == regenerated_ast.to_dict()
+
+
+def test_decorators():
+    original_code = """@property
+def get_value(self):
+    return self._value
+
+@staticmethod
+def create_default():
+    return 'default'"""
+
+    p1 = MuleParser(original_code, all_ops, filename='test.py')
+    original_ast = p1.parse()
+
+    generated_code = original_ast.py()
+
+    # Check exact string output
+    expected = """@property
+def get_value(self):
+    return self._value
+@staticmethod
+def create_default():
+    return 'default'
+"""
+    assert generated_code == expected
+
+    p2 = MuleParser(generated_code, all_ops, filename='test.py')
+    regenerated_ast = p2.parse()
+
+    assert original_ast.to_dict() == regenerated_ast.to_dict()
+
+
+def test_class_with_decorated_methods():
+    original_code = """class Example:
+    @classmethod
+    def from_string(cls, s):
+        return cls()
+    
+    @property
+    def name(self):
+        return self._name"""
+
+    p1 = MuleParser(original_code, all_ops, filename='test.py')
+    original_ast = p1.parse()
+
+    generated_code = original_ast.py()
+
+    p2 = MuleParser(generated_code, all_ops, filename='test.py')
+    regenerated_ast = p2.parse()
+
+    assert original_ast.to_dict() == regenerated_ast.to_dict()

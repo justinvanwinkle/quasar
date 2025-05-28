@@ -163,16 +163,10 @@ def value(self):
     p = MuleParser(code, all_ops, filename='test.py')
     root = p.parse()
 
-    # Decorators might be parsed or stripped
-    # The exact behavior depends on implementation
+    # Decorators should be properly preserved
     body_form = root.body.forms[0]
-    if body_form.kind == 'body':
-        # Decorator might create a body wrapper
-        func = body_form.forms[0]
-        assert func.kind == 'defun'
-    else:
-        # Decorator might be stripped, leaving just the function
-        assert body_form.kind == 'defun'
+    assert body_form.kind == 'decorator'
+    assert body_form.wrapped.kind == 'defun'
 
 
 def test_class_inheritance():
