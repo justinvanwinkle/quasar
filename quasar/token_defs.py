@@ -988,6 +988,12 @@ class AssignOrEquals(EnumeratedToken):
                     condition = parser.expression(Precedence.OR)
                     parser.match('ELSE')
                     false_expr = parser.expression(Precedence.STATEMENT_LEVEL)
+                    # Recursively handle nested ternary expressions
+                    while parser.maybe_match('IF'):
+                        nested_condition = parser.expression(Precedence.OR)
+                        parser.match('ELSE')
+                        nested_false_expr = parser.expression(Precedence.STATEMENT_LEVEL)
+                        false_expr = ConditionalExpression(false_expr, nested_condition, nested_false_expr)
                     right = ConditionalExpression(right, condition, false_expr)
                 parser.maybe_match('NEWLINE')
                 parser.ns.push_new()

@@ -342,6 +342,37 @@ def test_nested_ternary_expressions():
     assert ternary.false_expr.kind == 'conditional'
 
 
+def test_doubly_nested_ternary_expressions():
+    """Test doubly nested ternary expressions: a if x else b if y else c if z else d"""
+    code = """result = a if x > 0 else b if y > 0 else c if z > 0 else d"""
+
+    p = MuleParser(code, all_ops, filename='test.py')
+    root = p.parse()
+
+    assignment = root.body.forms[0]
+    ternary = assignment.right
+    assert ternary.kind == 'conditional'
+
+    # Top level: a if x > 0 else (nested expression)
+    assert ternary.true_expr.name == 'a'
+
+    # The false_expr should be another conditional: (b if y > 0 else c) if z > 0 else d
+    assert ternary.false_expr.kind == 'conditional'
+    outer_nested = ternary.false_expr
+
+    # The true_expr of the outer nested should be: b if y > 0 else c
+    assert outer_nested.true_expr.kind == 'conditional'
+    inner_nested = outer_nested.true_expr
+
+    # Verify the inner nested: b if y > 0 else c
+    assert inner_nested.true_expr.name == 'b'
+    assert inner_nested.false_expr.name == 'c'
+
+    # The final false_expr should be 'd'
+    assert outer_nested.false_expr.kind == 'symbol'
+    assert outer_nested.false_expr.name == 'd'
+
+
 def test_if_statement_vs_ternary_expression():
     """Test that if statements and ternary expressions are parsed differently."""
 

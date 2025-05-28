@@ -12,16 +12,16 @@ if z:
 """
     p = MuleParser(code, all_ops, filename='test.py')
     root = p.parse()
-    
+
     # Should have 2 separate forms
     assert len(root.body.forms) == 2
-    
+
     # First form should be assignment
     assignment = root.body.forms[0]
     assert assignment.kind == 'setf'
     assert assignment.left.name == 'x'
     assert assignment.right.name == 'y'
-    
+
     # Second form should be if statement
     if_stmt = root.body.forms[1]
     assert if_stmt.kind == 'cond'
@@ -37,20 +37,20 @@ if type == 'op':
 """
     p = MuleParser(code, all_ops, filename='test.py')
     root = p.parse()
-    
+
     # Should have 3 separate forms
     assert len(root.body.forms) == 3
-    
+
     # First: type = token_names[tokenize_token.type]
     assignment1 = root.body.forms[0]
     assert assignment1.kind == 'setf'
     assert assignment1.left.name == 'type'
-    
-    # Second: value = tokenize_token.string  
+
+    # Second: value = tokenize_token.string
     assignment2 = root.body.forms[1]
     assert assignment2.kind == 'setf'
     assert assignment2.left.name == 'value'
-    
+
     # Third: if type == 'op':
     if_stmt = root.body.forms[2]
     assert if_stmt.kind == 'cond'
@@ -65,16 +65,16 @@ if condition:
 """
     p = MuleParser(code, all_ops, filename='test.py')
     root = p.parse()
-    
+
     # Should have 2 separate forms
     assert len(root.body.forms) == 2
-    
+
     # First form: assignment with attribute access
     assignment = root.body.forms[0]
     assert assignment.kind == 'setf'
     assert assignment.left.name == 'result'
     assert assignment.right.kind == 'getattr'
-    
+
     # Second form: if statement
     if_stmt = root.body.forms[1]
     assert if_stmt.kind == 'cond'
@@ -93,16 +93,16 @@ e = 5
 """
     p = MuleParser(code, all_ops, filename='test.py')
     root = p.parse()
-    
+
     # Should have 4 top-level forms: a=1, b=2, if statement, e=5
     assert len(root.body.forms) == 4
-    
+
     # Check each form
     assert root.body.forms[0].kind == 'setf'  # a = 1
     assert root.body.forms[1].kind == 'setf'  # b = 2
     assert root.body.forms[2].kind == 'cond'  # if statement
     assert root.body.forms[3].kind == 'setf'  # e = 5
-    
+
     # Check the if statement has proper nested structure
     if_stmt = root.body.forms[2]
     assert len(if_stmt.clauses) == 1
@@ -117,15 +117,15 @@ print(result)
 """
     p = MuleParser(code, all_ops, filename='test.py')
     root = p.parse()
-    
+
     # Should have 2 forms
     assert len(root.body.forms) == 2
-    
+
     # First should be assignment with ternary expression
     assignment = root.body.forms[0]
     assert assignment.kind == 'setf'
     assert assignment.right.kind == 'conditional'
-    
+
     # Second should be print call
     print_call = root.body.forms[1]
     assert print_call.kind == 'call'
@@ -140,15 +140,15 @@ if condition:
 """
     p = MuleParser(code, all_ops, filename='test.py')
     root = p.parse()
-    
+
     # Should have 2 forms
     assert len(root.body.forms) == 2
-    
+
     # First: function definition
     func_def = root.body.forms[0]
     assert func_def.kind == 'defun'
     assert func_def.name.name == 'func'
-    
+
     # Second: if statement
     if_stmt = root.body.forms[1]
     assert if_stmt.kind == 'cond'
