@@ -199,7 +199,7 @@ class MuleParser(PrattParser):
                 pass
             # Only parse an expression if we're not at ENDBLOCK after consuming newlines
             if self.watch('ENDBLOCK', consume=False):
-                form = self.expression(Precedence.STATEMENT_LEVEL)
+                form = self.expression(Precedence.FULL_EXPRESSION)
                 forms.append(form)
             while self.maybe_match('NEWLINE'):
                 pass
