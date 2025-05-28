@@ -983,6 +983,12 @@ class AssignOrEquals(EnumeratedToken):
                 return mvb_node
             else:
                 right = parser.expression(Precedence.STATEMENT_LEVEL)  # Assignment context
+                # Check for ternary if expression: x if condition else y
+                if parser.maybe_match('IF'):
+                    condition = parser.expression(Precedence.OR)
+                    parser.match('ELSE')
+                    false_expr = parser.expression(Precedence.STATEMENT_LEVEL)
+                    right = ConditionalExpression(right, condition, false_expr)
                 parser.maybe_match('NEWLINE')
                 parser.ns.push_new()
                 parser.ns.add(left)
@@ -1077,7 +1083,7 @@ class Name(Token):
             self.lbp = Precedence.AND
         elif value == 'if':
             self.name = 'IF'
-            self.lbp = Precedence.CONDITIONAL
+            self.lbp = 0
         elif value == 'not':
             self.name = 'NOT'
             self.lbp = Precedence.NOT
