@@ -10,7 +10,7 @@ def test_list_comprehension():
     expr = Symbol('x')
     var = Symbol('x')
     iterable = Symbol('range(10)')
-    
+
     comp = Comprehension(expr, var, iterable, comp_type='list')
     result = comp.py()
     assert result == '[x for x in range(10)]'
@@ -23,7 +23,7 @@ def test_list_comprehension_with_condition():
     var = Symbol('x')
     iterable = Symbol('range(10)')
     condition = Symbol('x > 5')
-    
+
     comp = Comprehension(expr, var, iterable, condition=condition, comp_type='list')
     result = comp.py()
     assert result == '[x for x in range(10) if x > 5]'
@@ -35,7 +35,7 @@ def test_set_comprehension():
     expr = Symbol('x')
     var = Symbol('x')
     iterable = Symbol('range(10)')
-    
+
     comp = Comprehension(expr, var, iterable, comp_type='set')
     result = comp.py()
     assert result == '{x for x in range(10)}'
@@ -48,7 +48,7 @@ def test_set_comprehension_with_condition():
     var = Symbol('x')
     iterable = Symbol('range(10)')
     condition = Symbol('x % 2 == 0')
-    
+
     comp = Comprehension(expr, var, iterable, condition=condition, comp_type='set')
     result = comp.py()
     assert result == '{x for x in range(10) if x % 2 == 0}'
@@ -62,7 +62,7 @@ def test_dict_comprehension():
     expr = (key, value)  # Dictionary comprehensions use tuples for key-value pairs
     var = Symbol('k, v')
     iterable = Symbol('items')
-    
+
     comp = Comprehension(expr, var, iterable, comp_type='dict')
     result = comp.py()
     assert result == '{k: v for k, v in items}'
@@ -77,7 +77,7 @@ def test_dict_comprehension_with_condition():
     var = Symbol('k, v')
     iterable = Symbol('items')
     condition = Symbol("k != 'skip'")
-    
+
     comp = Comprehension(expr, var, iterable, condition=condition, comp_type='dict')
     result = comp.py()
     assert result == "{k: v for k, v in items if k != 'skip'}"
@@ -89,7 +89,7 @@ def test_generator_comprehension():
     expr = Symbol('x')
     var = Symbol('x')
     iterable = Symbol('range(10)')
-    
+
     comp = Comprehension(expr, var, iterable, comp_type='generator')
     result = comp.py()
     assert result == '(x for x in range(10))'
@@ -102,7 +102,7 @@ def test_generator_comprehension_with_condition():
     var = Symbol('x')
     iterable = Symbol('range(10)')
     condition = Symbol('x > 3')
-    
+
     comp = Comprehension(expr, var, iterable, condition=condition, comp_type='generator')
     result = comp.py()
     assert result == '(x * 2 for x in range(10) if x > 3)'
@@ -113,7 +113,7 @@ def test_comprehension_default_type():
     expr = Symbol('x')
     var = Symbol('x')
     iterable = Symbol('items')
-    
+
     # Default should be list comprehension
     comp = Comprehension(expr, var, iterable)
     result = comp.py()
@@ -127,7 +127,7 @@ def test_comprehension_complex_expressions():
     var = Symbol('x')
     iterable = Symbol('names')
     condition = Symbol('len(x) > 3')
-    
+
     comp = Comprehension(expr, var, iterable, condition=condition, comp_type='list')
     result = comp.py()
     assert result == '[x.upper() for x in names if len(x) > 3]'
@@ -141,7 +141,7 @@ def test_nested_dict_comprehension():
     expr = (key, value)
     var = Symbol('k, v')
     iterable = Symbol('data.items()')
-    
+
     comp = Comprehension(expr, var, iterable, comp_type='dict')
     result = comp.py()
     assert result == '{func(k): process(v) for k, v in data.items()}'
@@ -153,9 +153,9 @@ def test_comprehension_attributes():
     var = Symbol('i')
     iterable = Symbol('range(5)')
     condition = Symbol('i % 2')
-    
+
     comp = Comprehension(expr, var, iterable, condition=condition, comp_type='set')
-    
+
     assert comp.expr == expr
     assert comp.var == var
     assert comp.iterable == iterable

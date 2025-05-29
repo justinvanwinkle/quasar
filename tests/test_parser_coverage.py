@@ -54,16 +54,16 @@ def test_namespace_stack_inside_form_when_empty():
 def test_namespace_stack_return_name_search():
     """Test NamespaceStack.return_name searching (lines 70-72)."""
     stack = NamespaceStack()
-    
+
     # Push namespace without return_name
     stack.push_new()
-    
+
     # Push namespace with return_name
     stack.push_new(return_name='test_func')
-    
+
     # Push another without return_name
     stack.push_new()
-    
+
     # Should find the return_name from the second namespace
     assert stack.return_name == 'test_func'
 
@@ -73,10 +73,10 @@ def test_namespace_stack_contains():
     stack = NamespaceStack()
     stack.push_new()
     stack.add('var1')
-    
+
     stack.push_new()
     stack.add('var2')
-    
+
     # Should find variables in any namespace
     assert 'var1' in stack
     assert 'var2' in stack
@@ -87,7 +87,7 @@ def test_mule_parser_unused_expression_method():
     """Test the unused expression method in _munge_tokens (lines 139-140)."""
     # This method is defined but never used, we just need to access it
     parser = MuleParser("x = 1", all_ops, filename='test.py')
-    
+
     # The expression function is defined in _munge_tokens but not used
     # We can't easily call it directly, but we can trigger token processing
     result = parser.parse()
@@ -123,7 +123,7 @@ def test_command_line_interface():
     # Test that the CLI imports work - they're in the main block
     import argparse
     from os.path import split, splitext
-    
+
     # Just verify these imports work
     assert argparse is not None
     assert split is not None

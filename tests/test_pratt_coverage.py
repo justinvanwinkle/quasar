@@ -43,16 +43,16 @@ def test_token_generation_exception_handling():
     # Create a scenario that might cause token generation to fail
     # We'll mock the _generate_tokens method to raise an exception
     parser = MuleParser("x = 1", all_ops, filename='test.py')
-    
+
     # Store original method
     original_generate = parser._generate_tokens
-    
+
     def failing_generate():
         raise ValueError("Test exception")
-    
+
     # Replace method temporarily
     parser._generate_tokens = failing_generate
-    
+
     # This should re-raise the exception
     with pytest.raises(ValueError, match="Test exception"):
         _ = parser.tokens
@@ -61,14 +61,14 @@ def test_token_generation_exception_handling():
 def test_syntax_error_details():
     """Test detailed syntax error information (lines 99-102)."""
     parser = MuleParser("if True:", all_ops, filename='test.py')
-    
+
     # Force parser into a state where it expects a specific token
     parser.feed()  # Initialize first token
-    
+
     # Try to match something that doesn't exist
     with pytest.raises(SyntaxError) as exc_info:
         parser.match('NONEXISTENT')
-    
+
     error_msg = str(exc_info.value)
     assert 'Expected NONEXISTENT' in error_msg
     assert 'test.py' in error_msg

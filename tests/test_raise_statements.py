@@ -10,7 +10,7 @@ def test_bare_raise():
     code = "raise"
     parser = MuleParser(code, all_ops, filename='test.py')
     result = parser.parse()
-    
+
     # Should be a raise with no exception
     raise_stmt = result.body.forms[0]
     assert raise_stmt.kind == 'raise'
@@ -24,7 +24,7 @@ def test_raise_with_newline():
 pass"""
     parser = MuleParser(code, all_ops, filename='test.py')
     result = parser.parse()
-    
+
     # Should be a bare raise
     raise_stmt = result.body.forms[0]
     assert raise_stmt.kind == 'raise'
@@ -37,7 +37,7 @@ def test_raise_simple_exception():
     code = "raise ValueError"
     parser = MuleParser(code, all_ops, filename='test.py')
     result = parser.parse()
-    
+
     raise_stmt = result.body.forms[0]
     assert raise_stmt.kind == 'raise'
     assert raise_stmt.exception is not None
@@ -49,7 +49,7 @@ def test_raise_exception_with_message():
     code = "raise ValueError('error message')"
     parser = MuleParser(code, all_ops, filename='test.py')
     result = parser.parse()
-    
+
     raise_stmt = result.body.forms[0]
     assert raise_stmt.kind == 'raise'
     assert raise_stmt.exception is not None
@@ -65,7 +65,7 @@ def test_raise_exception_with_multiple_args():
     code = "raise ValueError('message', 42)"
     parser = MuleParser(code, all_ops, filename='test.py')
     result = parser.parse()
-    
+
     raise_stmt = result.body.forms[0]
     assert raise_stmt.kind == 'raise'
     assert raise_stmt.exception.kind == 'call'
@@ -80,7 +80,7 @@ def test_raise_exception_with_keyword_args():
     code = "raise CustomError(message='test', code=500)"
     parser = MuleParser(code, all_ops, filename='test.py')
     result = parser.parse()
-    
+
     raise_stmt = result.body.forms[0]
     assert raise_stmt.kind == 'raise'
     assert raise_stmt.exception.kind == 'call'
@@ -95,7 +95,7 @@ def test_raise_mixed_args():
     code = "raise MyError('msg', code=404, debug=True)"
     parser = MuleParser(code, all_ops, filename='test.py')
     result = parser.parse()
-    
+
     raise_stmt = result.body.forms[0]
     assert raise_stmt.kind == 'raise'
     py_output = raise_stmt.py()
@@ -110,7 +110,7 @@ def test_raise_with_complex_expression():
     code = "raise errors.ValidationError"
     parser = MuleParser(code, all_ops, filename='test.py')
     result = parser.parse()
-    
+
     raise_stmt = result.body.forms[0]
     assert raise_stmt.kind == 'raise'
     py_output = raise_stmt.py()
@@ -123,10 +123,10 @@ def test_raise_in_try_except():
     x = 1
 except:
     raise ValueError('something went wrong')"""
-    
+
     parser = MuleParser(code, all_ops, filename='test.py')
     result = parser.parse()
-    
+
     # Should parse without error
     assert result is not None
     py_output = result.py()
@@ -136,20 +136,20 @@ except:
 def test_raise_attributes():
     """Test raise statement object attributes."""
     from quasar.token_defs import Raise, Symbol, Call
-    
+
     # Test bare raise
     bare_raise = Raise()
     assert bare_raise.kind == 'raise'
     assert bare_raise.exception is None
     assert bare_raise.py() == 'raise'
-    
+
     # Test raise with exception
     exception = Symbol('ValueError')
     raise_with_exc = Raise(exception)
     assert raise_with_exc.kind == 'raise'
     assert raise_with_exc.exception == exception
     assert raise_with_exc.py() == 'raise ValueError'
-    
+
     # Test raise with call
     call = Call(Symbol('RuntimeError'), [Symbol("'error'")])
     raise_with_call = Raise(call)
@@ -166,7 +166,7 @@ def test_raise_edge_cases():
         "raise my_module.MyError",
         "raise get_exception_class()",
     ]
-    
+
     for code in test_cases:
         try:
             parser = MuleParser(code, all_ops, filename='test.py')
@@ -186,10 +186,10 @@ def test_raise_multiline_args():
     'This is a long error message',
     some_variable
 )"""
-    
+
     parser = MuleParser(code, all_ops, filename='test.py')
     result = parser.parse()
-    
+
     raise_stmt = result.body.forms[0]
     assert raise_stmt.kind == 'raise'
     py_output = raise_stmt.py()

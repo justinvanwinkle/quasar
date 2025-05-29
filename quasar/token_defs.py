@@ -1179,15 +1179,15 @@ class Name(Token):
         if value == 'raise':
             if parser.maybe_match('NEWLINE'):
                 return Raise()
-            
+
             # Check if we're at the end of input or a block - if so, it's a bare raise
             if parser.token_handler.name in ('ENDBLOCK', None):
                 return Raise()
-            
+
             exception_class = parser.expression(Precedence.NAME_CONTEXT)
             args = []
             kw_args = []
-            
+
             if parser.maybe_match('('):
                 while parser.watch(')'):
                     arg_name = parser.expression(Precedence.AND)
@@ -1247,7 +1247,11 @@ class Name(Token):
             while parser.maybe_match('DOT'):
                 relative += 1
 
-            module = parser.expression(Precedence.NAME_CONTEXT)
+            # Check if next token is 'import' - if so, module name is empty for relative imports
+            if parser.token_handler.name == 'NAME' and parser.token_handler.value == 'import':
+                module = Symbol('') if relative > 0 else None
+            else:
+                module = parser.expression(Precedence.NAME_CONTEXT)
 
             import_ = parser.match('NAME')
             assert import_.value == 'import'
@@ -1575,8 +1579,18 @@ class LBrace(Token):
 @register
 class NumberToken(Token):
     start_chars = set('0123456789')
-    rest_chars = start_chars | set('ex')
+    rest_chars = start_chars | set('abcdefxobeEXOB.')  # Support hex, octal, binary, float, exponential
     name = 'NUMBER'
+
+    def match(self, c):
+        # Handle exponential notation with + or - following e/E
+        if len(self.value) > 0:
+            # Check if we're in exponential notation and the character is + or -
+            if (self.value[-1].lower() == 'e' and c in '+-'):
+                return True
+
+        # Default matching logic
+        return c in self.rest_chars
 
     def nud(self, parser, value):
         return Number(value)
@@ -1587,6 +1601,19 @@ class Dot(Token):
     lbp = Precedence.ATTRIBUTE_CALL_INDEX
     start_chars = {'.'}
     name = 'DOT'
+
+    def nud(self, parser, value):
+        # Check for ellipsis (...)
+        if parser.maybe_match('DOT') and parser.maybe_match('DOT'):
+            return Symbol('...')
+
+        # Check for floating point number starting with dot (.123)
+        if parser.token_handler.name == 'NUMBER':
+            number_token = parser.match('NUMBER')
+            return Number(f'.{number_token.value}')
+
+        # Single dot - could be used in from imports like "from . import"
+        return Symbol('.')
 
     def led(self, parser, left):
         right = parser.expression(Precedence.ATTRIBUTE_CALL_INDEX)
