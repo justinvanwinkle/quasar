@@ -1179,21 +1179,29 @@ class Name(Token):
         if value == 'raise':
             if parser.maybe_match('NEWLINE'):
                 return Raise()
+            
+            # Check if we're at the end of input or a block - if so, it's a bare raise
+            if parser.token_handler.name in ('ENDBLOCK', None):
+                return Raise()
+            
             exception_class = parser.expression(Precedence.NAME_CONTEXT)
+            args = []
+            kw_args = []
+            
             if parser.maybe_match('('):
                 while parser.watch(')'):
-                    args = []
-                    kw_args = []
                     arg_name = parser.expression(Precedence.AND)
                     if parser.maybe_match('='):
                         kw_args.append((arg_name, parser.expression(Precedence.AND)))
                     else:
                         args.append(arg_name)
-                        parser.maybe_match('NEWLINE')
-                        parser.maybe_match(',')
-                        parser.maybe_match('NEWLINE')
-
-            return Raise(Call(exception_class, args, kw_args))
+                    parser.maybe_match('NEWLINE')
+                    parser.maybe_match(',')
+                    parser.maybe_match('NEWLINE')
+                return Raise(Call(exception_class, args, kw_args))
+            else:
+                # No parentheses, just raise the exception class directly
+                return Raise(exception_class)
         if value == 'try':
             parser.match(':')
             parser.ns.push_new()
