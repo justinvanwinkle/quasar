@@ -760,7 +760,17 @@ class BinaryOperator(FSTNode):
         self.right = right
 
     def py(self):
-        return f'({self.left.py()} {self.op} {self.right.py()})'
+        return f'{self.left.py()} {self.op} {self.right.py()}'
+
+
+class Parentheses(FSTNode):
+    kind = 'parentheses'
+
+    def __init__(self, expr):
+        self.expr = expr
+
+    def py(self):
+        return f'({self.expr.py()})'
 
 
 class AttrLookup(FSTNode):
@@ -1416,7 +1426,9 @@ class LParen(Token):
                 comma_seen = True
         if comma_seen or not values:
             return Tuple(values)
-        return values[0]
+        else:
+            # Single expression in parentheses - preserve the parentheses
+            return Parentheses(values[0])
 
 
 @register

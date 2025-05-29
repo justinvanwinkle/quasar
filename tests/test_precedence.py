@@ -22,23 +22,41 @@ def normalize_ast(node):
     if not hasattr(node, 'to_dict'):
         return node
 
-    node_dict = node.to_dict()
+    # For parentheses nodes, unwrap the inner expression
+    if node.kind == 'parentheses':
+        return normalize_ast(getattr(node, 'expr'))
 
     # For tuples with single elements (often created by parentheses), unwrap them
-    if node_dict.get('kind') == 'tuple' and len(node_dict.get('values', [])) == 1:
+    if node.kind == 'tuple' and len(getattr(node, 'values', [])) == 1:
         return normalize_ast(node.values[0])
 
-    # Recursively normalize nested structures
-    if 'left' in node_dict and hasattr(node_dict['left'], 'to_dict'):
-        node_dict['left'] = normalize_ast(getattr(node, 'left'))
-    if 'right' in node_dict and hasattr(node_dict['right'], 'to_dict'):
-        node_dict['right'] = normalize_ast(getattr(node, 'right'))
-    if 'values' in node_dict:
-        node_dict['values'] = [normalize_ast(val) for val in getattr(node, 'values', [])]
-    if 'args' in node_dict:
-        node_dict['args'] = [normalize_ast(arg) for arg in getattr(node, 'args', [])]
+    # Create a normalized dictionary by processing each field
+    result = {'kind': node.kind}
 
-    return node_dict
+    # Handle common fields that might contain nodes
+    for attr_name in ['left', 'right', 'expr', 'key', 'condition', 'true_expr', 'false_expr', 'test', 'body', 'exception']:
+        if hasattr(node, attr_name):
+            attr_value = getattr(node, attr_name)
+            if hasattr(attr_value, 'to_dict'):
+                result[attr_name] = normalize_ast(attr_value)
+            else:
+                result[attr_name] = attr_value
+
+    # Handle list fields
+    for attr_name in ['values', 'args', 'forms', 'clauses']:
+        if hasattr(node, attr_name):
+            attr_value = getattr(node, attr_name)
+            if isinstance(attr_value, list):
+                result[attr_name] = [normalize_ast(item) if hasattr(item, 'to_dict') else item for item in attr_value]
+            else:
+                result[attr_name] = attr_value
+
+    # Handle simple fields
+    for attr_name in ['op', 'name', 'value', 'literal']:
+        if hasattr(node, attr_name):
+            result[attr_name] = getattr(node, attr_name)
+
+    return result
 
 
 def assert_same_precedence(code1, code2):
@@ -213,7 +231,7 @@ def test_parentheses_override():
     # Second expression: multiplication at top level
     assert expr2.kind == 'binary_op'
     assert expr2.op == '*'
-    assert expr2.left.kind in ('binary_op', 'tuple')  # Parentheses might create different structures
+    assert expr2.left.kind in ('binary_op', 'tuple', 'parentheses')  # Parentheses might create different structures
 
 
 def test_assignment_precedence():

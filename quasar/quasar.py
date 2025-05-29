@@ -55,6 +55,7 @@ def main(args):
 
 if __name__ == '__main__':
     import argparse
+    from pprint import pprint
 
     argparser = argparse.ArgumentParser(
         description='Python code (re)formatter')
@@ -62,6 +63,13 @@ if __name__ == '__main__':
     argparser.add_argument('-d', '--debug',
                            action='store_true',
                            help='debug output')
+    argparser.add_argument('-p', '--python',
+                           action='store_true',
+                           help='print python')
     args = argparser.parse_args()
 
-    main(args)
+    parsed = Quasar(args.fn).parse()
+    if args.python:
+        print(parsed.py())
+    else:
+        pprint(parsed.to_dict())
