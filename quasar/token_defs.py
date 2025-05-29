@@ -242,15 +242,6 @@ class Raise(FSTNode):
         return 'raise'
 
 
-class Quote(FSTNode):
-    kind = 'quote'
-
-    def __init__(self, form):
-        self.form = form
-
-    def py(self):
-        return f"'{self.form.py()}'"
-
 
 class PythonBody(FSTNode):
     kind = 'body'
@@ -281,17 +272,6 @@ class PythonModule(FSTNode):
     def py(self):
         return self.body.py(indent='')
 
-
-class Method(FSTNode):
-    kind = 'defun'
-
-    def __init__(self, defun, class_name=None):
-        self.defun = defun
-        self.class_name = class_name
-        self.first_arg = defun.arg_names[0]
-
-    def py(self):
-        return self.defun.py()
 
 
 class CLOSClass(FSTNode):
