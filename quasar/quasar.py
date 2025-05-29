@@ -15,7 +15,6 @@ def tokenizer(s):
     yield Token('module', '')
     for tokenize_token in tokenize_tokens:
         token = Token.from_tokenize(tokenize_token)
-        print(token)
         yield token
 
 

@@ -995,6 +995,17 @@ class BinOpToken(EnumeratedToken):
         '%': 'MOD'}
 
     def led(self, parser, left):
+        # Check for augmented assignment: +, -, *, etc. followed by =
+        if parser.token_handler.name == '=' and self.value in ('+', '-', '*', '/', '%', '&', '|', '^', '//', '**', '<<', '>>'):
+            # This is an augmented assignment like +=, -=, etc.
+            parser.feed()  # consume the '='
+            right = parser.expression(Precedence.STATEMENT_LEVEL)
+            # Convert += to regular assignment with binary operation
+            # left += right becomes left = left + right
+            binary_op = BinaryOperator(self.value, left, right)
+            return Setf(left, binary_op)
+
+        # Regular binary operation
         op = self.op_map.get(self.value, self.value)
         # Exponentiation is right-associative
         if self.value == '**':
@@ -1016,20 +1027,30 @@ class BinOpToken(EnumeratedToken):
 @register
 class AugAssign(EnumeratedToken):
     lbp_map = {
-        '%=': 0,
-        '&=': 0,
-        '*=': 0,
-        '**=': 0,
-        '+=': 0,
-        '-=': 0,
-        '//=': 0,
-        '<<=': 0,
-        '<=': 0,
-        '>>=': 0,
-        '>=': 0,
-        '/=': 0,
-        '^=': 0,
-        '|=': 0}
+        '%=': Precedence.ASSIGNMENT,
+        '&=': Precedence.ASSIGNMENT,
+        '*=': Precedence.ASSIGNMENT,
+        '**=': Precedence.ASSIGNMENT,
+        '+=': Precedence.ASSIGNMENT,
+        '-=': Precedence.ASSIGNMENT,
+        '//=': Precedence.ASSIGNMENT,
+        '<<=': Precedence.ASSIGNMENT,
+        '>>=': Precedence.ASSIGNMENT,
+        '/=': Precedence.ASSIGNMENT,
+        '^=': Precedence.ASSIGNMENT,
+        '|=': Precedence.ASSIGNMENT}
+
+    def nud(self, parser, value):
+        raise syntax_error_with_location(f'Unexpected {value} at start of expression', parser)
+
+    def led(self, parser, left):
+        # Parse augmented assignment: left += right
+        right = parser.expression(Precedence.STATEMENT_LEVEL)
+        # Convert += to regular assignment with binary operation
+        # left += right becomes left = left + right
+        op = self.value[:-1]  # Remove the '=' to get the operator
+        binary_op = BinaryOperator(op, left, right)
+        return Setf(left, binary_op)
 
 
 @register
