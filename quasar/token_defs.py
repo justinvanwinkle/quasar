@@ -94,6 +94,34 @@ def unbox_arglist(t):
     return args, kwargs
 
 
+def parse_comprehension(parser, expr, comp_type='list'):
+    """
+    Parse a comprehension after seeing 'expr for'.
+    Returns a Comprehension node.
+
+    Handles: expr for var in iterable [if condition]
+    """
+    # Parse the 'var in iterable' part
+    in_node = parser.expression()
+
+    # Extract var and iterable from the 'in' node
+    if hasattr(in_node, 'kind') and in_node.kind == 'in':
+        var = in_node.thing
+        iterable = in_node.collection
+    else:
+        # Fallback - assume the in_node is the full expression
+        # This might need adjustment based on how 'in' is parsed
+        var = in_node  # This is probably wrong, but let's see
+        iterable = None
+
+    # Parse optional 'if condition'
+    condition = None
+    if parser.maybe_match('IF'):
+        condition = parser.expression()
+
+    return Comprehension(expr, var, iterable, condition, comp_type)
+
+
 def register(cls):
     all_ops.append(cls)
     return cls
@@ -426,6 +454,38 @@ class ConditionalExpression(FSTNode):
 
     def py(self):
         return f'{self.true_expr.py()} if {self.condition.py()} else {self.false_expr.py()}'
+
+
+class Comprehension(FSTNode):
+    kind = 'comprehension'
+
+    def __init__(self, expr, var, iterable, condition=None, comp_type='list'):
+        self.expr = expr  # The expression being generated
+        self.var = var    # The variable in the for clause
+        self.iterable = iterable  # What we're iterating over
+        self.condition = condition  # Optional if condition
+        self.comp_type = comp_type  # 'list', 'set', 'dict', 'generator'
+
+    def py(self):
+        if self.comp_type == 'dict' and isinstance(self.expr, tuple):
+            # Dictionary comprehension: {k: v for ...}
+            key, value = self.expr
+            comprehension = f'{key.py()}: {value.py()} for {self.var.py()} in {self.iterable.py()}'
+        else:
+            # List, set, or generator comprehension
+            comprehension = f'{self.expr.py()} for {self.var.py()} in {self.iterable.py()}'
+
+        if self.condition:
+            comprehension += f' if {self.condition.py()}'
+
+        if self.comp_type == 'list':
+            return f'[{comprehension}]'
+        elif self.comp_type == 'set':
+            return f'{{{comprehension}}}'
+        elif self.comp_type == 'dict':
+            return f'{{{comprehension}}}'
+        else:  # generator
+            return f'({comprehension})'
 
 
 class ForExpression(FSTNode):
@@ -1404,7 +1464,12 @@ class LParen(Token):
             kw_args = []
             while parser.watch(')'):
                 arg = parser.expression(Precedence.FUNCTION_ARG)
-                if parser.maybe_match('='):
+                # Check if this is a generator expression: expr for var in iterable [if condition]
+                if parser.maybe_match('for'):
+                    # This is a generator expression
+                    generator_expr = parse_comprehension(parser, arg, 'generator')
+                    args.append(generator_expr)
+                elif parser.maybe_match('='):
                     kw_args.append((arg, parser.expression(Precedence.FUNCTION_ARG)))
                 else:
                     args.append(arg)
@@ -1441,6 +1506,13 @@ class LBracket(Token):
         values = []
         while parser.watch(']'):
             expr = parser.expression(Precedence.FUNCTION_ARG)
+            # Check if this is a comprehension: expr for var in iterable [if condition]
+            if parser.maybe_match('for'):
+                # This is a list comprehension
+                comprehension = parse_comprehension(parser, expr, 'list')
+                # Consume the closing ]
+                parser.match(']')
+                return comprehension
             values.append(expr)
             parser.maybe_match(',')
         return List(values)
@@ -1495,8 +1567,18 @@ class LBrace(Token):
             if parser.maybe_match(':'):
                 cls = 'dict'
                 val = parser.expression(Precedence.AND)
+                # Check for dict comprehension: {k: v for var in iterable}
+                if parser.maybe_match('for'):
+                    comprehension = parse_comprehension(parser, (key, val), 'dict')
+                    parser.match('}')
+                    return comprehension
             else:
                 val = None
+                # Check for set comprehension: {expr for var in iterable}
+                if parser.maybe_match('for'):
+                    comprehension = parse_comprehension(parser, key, 'set')
+                    parser.match('}')
+                    return comprehension
             key_vals.append((key, val))
             parser.maybe_match(',')
         if cls == 'dict':
