@@ -597,28 +597,11 @@ class In(FSTNode):
         return f'{self.thing.py()} in {self.collection.py()}'
 
 
-class Find(In):
-    kind = 'find'
-
-    def py(self):
-        return f'{self.thing.py()} in {self.collection.py()}'
-
-
 class Nil(FSTNode):
     kind = 'nil'
 
     def py(self):
         return 'None'
-
-
-class UsePackage(FSTNode):
-    kind = 'use'
-
-    def __init__(self, right):
-        self.right = right
-
-    def py(self):
-        return f'# USE-PACKAGE {self.right.name}'
 
 
 class List(FSTNode):
