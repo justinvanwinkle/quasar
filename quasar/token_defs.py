@@ -921,7 +921,11 @@ class Token:
         return self
 
     def nud(self, parser, value):
-        raise NotImplementedError
+        line = getattr(self, 'line', 'unknown')
+        column = getattr(self, 'column', 'unknown')
+        filename = getattr(parser, 'filename', 'unknown')
+        token_class = self.__class__.__name__
+        raise NotImplementedError(f'No nud implementation for {token_class} token "{value}" at {filename}:{line}:{column}')
 
     def __repr__(self):
         return '( %r %s )' % (self.value, self.name)
@@ -1068,6 +1072,8 @@ class AssignOrEquals(EnumeratedToken):
         '==': Precedence.IN_IS,
         '=': Precedence.ASSIGNMENT}
 
+    def nud(self, parser, value):
+        raise syntax_error_with_location(f'Unexpected {value} at start of expression', parser)
 
     def led(self, parser, left):
         if self.value == '=':
