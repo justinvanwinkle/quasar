@@ -80,19 +80,6 @@ def find_self_assignments(n):
     return assignments
 
 
-def unbox_arglist(t):
-    args = []
-    kwargs = []
-    if t.kind != 'tuple':
-        t = Tuple([t])
-    for arg in t.values:
-        if arg.kind == 'setf':
-            kwargs.append((arg.left, arg.right))
-        else:
-            args.append(arg)
-
-    return args, kwargs
-
 
 def parse_comprehension(parser, expr, comp_type='list'):
     """
